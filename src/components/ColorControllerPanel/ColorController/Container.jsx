@@ -4,6 +4,24 @@ import Tone from 'tone';
 import ColorControllerComponent from './Component';
 import { SYNTH_PRESETS } from 'instrumentPresets';
 import { SEND_CHANNELS } from 'utils/music';
+import { isSf2Reference, SF2_DYNAMIC_PARAMS } from 'utils/sf2Engine';
+
+// SF2 instruments have no Tone.js effects *chain* of their own (utils/
+// sf2Engine.js - no separate per-color node to connect one to), so
+// `effects` stays empty here rather than dereferencing
+// SYNTH_PRESETS[sf2Reference], which doesn't exist. They DO have
+// dynamicParams now (SF2_DYNAMIC_PARAMS - GM MIDI CC knobs), so this must
+// still return the real array: componentDidMount below indexes into it
+// once per knobVals entry, and an empty array here would make that
+// indexing go out of bounds. None of SF2_DYNAMIC_PARAMS' entries have a
+// `target` of 'effect' (unlike built-ins' dynamicParams), so
+// triggerEffectCallback's own target === 'effect' check already no-ops
+// for all of them correctly - Shape/Synth.js applies them directly as
+// MIDI CC messages, entirely outside this class's effects-chain system.
+const getSynthPreset = synthType =>
+  isSf2Reference(synthType)
+    ? { effects: [], dynamicParams: SF2_DYNAMIC_PARAMS }
+    : SYNTH_PRESETS[synthType];
 
 const propTypes = {
   color: string.isRequired,
@@ -25,7 +43,7 @@ class ColorController extends Component {
   constructor(props) {
     super(props);
     const { synthType, receiveChannel } = props;
-    const { effects } = SYNTH_PRESETS[synthType];
+    const { effects } = getSynthPreset(synthType);
 
     this.fxList = [];
     this.fxBus = new Tone.Gain(0.8);
@@ -41,14 +59,14 @@ class ColorController extends Component {
   componentDidMount() {
     const { knobVals, synthType } = this.props;
     knobVals.forEach((val, i) => {
-      this.triggerEffectCallback(SYNTH_PRESETS[synthType], i, val);
+      this.triggerEffectCallback(getSynthPreset(synthType), i, val);
     });
   }
 
   UNSAFE_componentWillReceiveProps(nextProps) {
     // Change instrument
     if (nextProps.synthType !== this.props.synthType) {
-      const newSynth = SYNTH_PRESETS[nextProps.synthType];
+      const newSynth = getSynthPreset(nextProps.synthType);
       this.connectEffects(newSynth.effects);
       nextProps.knobVals.forEach((val, i) => {
         this.triggerEffectCallback(newSynth, i, val);
@@ -62,7 +80,7 @@ class ColorController extends Component {
     );
     if (!this.props.knobVals || changedKnobIndex >= 0) {
       const val = nextProps.knobVals[changedKnobIndex];
-      const synth = SYNTH_PRESETS[nextProps.synthType];
+      const synth = getSynthPreset(nextProps.synthType);
 
       this.triggerEffectCallback(synth, changedKnobIndex, val);
     }

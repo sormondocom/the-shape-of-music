@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Badge, Drawer, Tooltip, Button, Popconfirm } from 'antd';
+import { Badge, Drawer, Tooltip, Button, Popconfirm, Dropdown, Menu } from 'antd';
 import {
   DownloadOutlined,
   ExportOutlined,
@@ -26,7 +26,13 @@ function Sidebar(props) {
   const {
     downloadUrls,
     projectName,
-    imperativeHandlers: { exportProjectToMIDI, saveProject, deleteProject },
+    imperativeHandlers: {
+      exportProjectToMIDI,
+      exportLineArt,
+      exportToMp3,
+      saveProject,
+      deleteProject,
+    },
   } = useProjectContext();
 
   const { isDarkMode } = useColorThemeContext();
@@ -66,11 +72,35 @@ function Sidebar(props) {
             </div>
           </Tooltip>
         </Badge>
-        <Tooltip placement="right" title="Export to MIDI">
-          <div className={styles.tabButton} onClick={exportProjectToMIDI}>
-            <ExportOutlined />
-          </div>
-        </Tooltip>
+        <Dropdown
+          placement="bottomLeft"
+          trigger={['click']}
+          overlay={
+            <Menu>
+              <Menu.Item key="midi" onClick={exportProjectToMIDI}>
+                Export MIDI
+              </Menu.Item>
+              <Menu.Item key="line-art" onClick={exportLineArt}>
+                Export Line Art (SVG)
+              </Menu.Item>
+              <Menu.Item
+                key="mp3"
+                onClick={() => {
+                  exportToMp3();
+                  setIsDownloadsDrawerVisible(true);
+                }}
+              >
+                Export MP3
+              </Menu.Item>
+            </Menu>
+          }
+        >
+          <Tooltip placement="right" title="Export">
+            <div className={styles.tabButton}>
+              <ExportOutlined />
+            </div>
+          </Tooltip>
+        </Dropdown>
         {showSettingsButton && (
           <Tooltip placement="right" title="Settings">
             <div

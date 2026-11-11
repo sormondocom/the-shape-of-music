@@ -1,9 +1,16 @@
 {
-  "name": "shape-your-music",
+  "name": "the-shape-of-music",
   "version": "0.1.0",
   "license": "MIT",
   "description": "Make music by drawing shapes",
   "author": "Elias Jarzombek",
+  "contributors": [
+    "Shawn Ormond <sormond@gmail.com> (fork maintainer, https://github.com/sormondocom/the-shape-of-music)"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sormondocom/the-shape-of-music.git"
+  },
   "keywords": [
     "music",
     "shapes",
@@ -12,11 +19,15 @@
     "geometry"
   ],
   "private": false,
+  "bin": {
+    "shape-line-art": "scripts/exportLineArt.js"
+  },
   "dependencies": {
     "@ant-design/icons": "^4.3.0",
     "@craco/craco": "^6.0.0",
     "@sentry/browser": "^5.0.8",
     "@sentry/node": "^5.12.4",
+    "@tonejs/midi": "^2.0.28",
     "antd": "4",
     "bufferutil": "^4.0.1",
     "chalk": "^2.4.2",
@@ -32,6 +43,7 @@
     "js-levenshtein": "^1.1.6",
     "jszip": "3.7.0",
     "konva": "^6.0.0",
+    "lamejs": "^1.2.1",
     "lodash": "^4.17.21",
     "midi-writer-js": "1.5.2",
     "netlify-identity-widget": "^1.5.5",
@@ -51,12 +63,16 @@
     "react-router-dom": "^5.0.0",
     "react-scripts": "5",
     "react-select": "^3.0.8",
+    "spessasynth_core": "4.4.4",
+    "spessasynth_lib": "^4.4.2",
     "teoria": "^2.5.0",
     "tone": "13.8.25",
-    "utf-8-validate": "^5.0.2"
+    "utf-8-validate": "^5.0.2",
+    "vexflow": "^5.0.0"
   },
   "scripts": {
     "checkForFaunaKey": "node ./scripts/check-for-fauna-key.js",
+    "line-art": "node ./scripts/exportLineArt.js",
     "start": "yarn netlify dev",
     "start:app": "craco start",
     "start:server": "yarn netlify serve:functions",
@@ -69,6 +85,7 @@
     "eject": "react-scripts eject"
   },
   "devDependencies": {
+    "@babel/register": "^7.22.0",
     "eslint-plugin-jasmine": "^2.10.1",
     "eslint-plugin-prettier": "^2.6.2",
     "fauna": "^2.5.0",

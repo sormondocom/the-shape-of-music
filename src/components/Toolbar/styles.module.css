@@ -1,24 +1,21 @@
 .toolbar {
-  display: grid;
+  display: flex;
+  position: relative;
   z-index: 2;
-  grid-template-rows: 100%;
-  grid-column-gap: 15px;
-  grid-template-columns: 80px 120px 270px 100px 200px 120px 250px 120px 1fr;
+  gap: 15px;
   min-width: 800px;
   top: 0px;
   height: 50px;
   padding: 8px 6px;
   width: 100%;
+  overflow-x: auto;
   background: #e5e5e5;
 }
 
 .colorPickerWrapper {
   width: 140px;
-  left: 0px;
-  top: 7px;
-  height: 50px;
-  position: relative;
-  z-index: 500;
+  position: absolute;
+  z-index: 1000;
 }
 
 .toolbarSection {
@@ -29,20 +26,53 @@
   /*padding: 2px;*/
   border-radius: 8px;
   grid-template-columns: repeat(2, 1fr);
+  flex-shrink: 0;
   /*background: #222;*/
 }
 
-.canvasControls {
-  grid-template-columns: repeat(2, 1fr);
+.transport {
+  width: 80px;
 }
 
 .toolSelect {
+  width: 130px;
   grid-template-columns: repeat(3, calc(100% / 3));
 }
 
+.insertShape {
+  width: 140px;
+  grid-template-columns: 1fr;
+}
+
+.importImage {
+  width: 120px;
+  grid-template-columns: repeat(2, calc(100% / 2));
+}
+
+.importGeo {
+  width: 55px;
+  grid-template-columns: 1fr;
+}
+
+.canvasControls {
+  width: 270px;
+  flex-shrink: 0;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.tempo {
+  width: 140px;
+  grid-template-columns: 1fr;
+}
+
 .musicalControls {
-  /*width: 250px;*/
+  width: 220px;
   grid-template-columns: 70px 1fr;
+}
+
+.OtherControls {
+  width: 90px;
+  margin-left: auto;
 }
 
 .toolbar button {

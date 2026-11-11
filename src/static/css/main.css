@@ -16,6 +16,21 @@ body {
   height: 100%;
   font-family: 'Inconsolata', monospace;
   font-size: 0.8em;
+  background: #eee;
+}
+
+/*
+  Only the background follows the theme here - no `color` override. Every
+  component that actually wants light text in dark mode already sets it
+  itself (Toolbar/Sidebar/PageContainer/LayersPanel via isDarkMode ternaries
+  or their own dark CSS variant) - a body-level text-color cascade instead
+  leaked into things that don't want it, like Button (components/Button),
+  which only ever sets backgroundColor and relies on inherited text color.
+  Most toolbar buttons keep a light background regardless of theme, so
+  inheriting light text from body made their labels disappear.
+*/
+body.theme--dark {
+  background: #242424;
 }
 
 button {
@@ -56,6 +71,7 @@ ul li {
 }
 
 #holder {
+  position: relative;
   background-color: #eeeeee;
   height: calc(100vh - 80px);
   width: 100%;

@@ -2,7 +2,10 @@
   position: absolute;
   z-index: 200;
   left: 0;
-  top: 100px;
+  /* leaves room for FileNameBadge (toolbar bottom at 80px + its own
+     padded height) directly above - keep in sync if that badge's size
+     changes */
+  top: 124px;
   display: flex;
   flex-direction: flex-column;
 }

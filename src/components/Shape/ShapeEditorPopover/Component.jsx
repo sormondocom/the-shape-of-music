@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
-import cx from 'classnames';
 import { themeColors, getDarker } from 'utils/color';
 
 import CheckboxButton from 'components/CheckboxButton';
@@ -18,18 +17,18 @@ const propTypes = {
     left: PropTypes.number.isRequired,
     top: PropTypes.number.isRequired,
   }),
-  caretPosition: PropTypes.shape({
-    top: PropTypes.number.isRequired,
-    isLeft: PropTypes.bool.isRequired,
-  }),
   colorIndex: PropTypes.number.isRequired,
+  activeColorIndex: PropTypes.number.isRequired,
+  activeColorIndices: PropTypes.arrayOf(PropTypes.number).isRequired,
   volume: PropTypes.number.isRequired,
+  startOffset: PropTypes.number,
 
   isMuted: PropTypes.bool.isRequired,
   isSoloed: PropTypes.bool.isRequired,
 
   onColorChange: PropTypes.func.isRequired,
   onVolumeChange: PropTypes.func.isRequired,
+  onStartOffsetChange: PropTypes.func.isRequired,
   onMuteChange: PropTypes.func.isRequired,
   onSoloChange: PropTypes.func.isRequired,
   onQuantizeFactorChange: PropTypes.func.isRequired,
@@ -42,34 +41,13 @@ const propTypes = {
   // perimeter: PropTypes.number.isRequired,
 };
 
-const Caret = ({ caretPosition, color }) => (
-  <div
-    className={cx({
-      [styles.tooltipArrow]: true,
-      [styles.arrowLeft]: caretPosition.isLeft,
-      [styles.arrowRight]: !caretPosition.isLeft,
-    })}
-    style={{
-      top: caretPosition.top,
-      borderRightColor: caretPosition.isLeft ? color : 'transparent',
-      borderLeftColor: !caretPosition.isLeft ? color : 'transparent',
-    }}
-  />
-);
-
-Caret.propTypes = {
-  caretPosition: PropTypes.shape({
-    top: PropTypes.number,
-    isLeft: PropTypes.bool,
-  }).isRequired,
-  color: PropTypes.string.isRequired,
-};
-
 function ShapeEditorPopoverComponent(props) {
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const {
     volume,
     onVolumeChange,
+    startOffset = 0,
+    onStartOffsetChange,
     isMuted,
     onMuteChange,
     isSoloed,
@@ -81,8 +59,9 @@ function ShapeEditorPopoverComponent(props) {
     onToBottomClick,
     onDeleteClick,
     onDuplicateClick,
-    caretPosition,
     colorIndex,
+    activeColorIndex,
+    activeColorIndices,
     panelStyle: { width, height, top, left },
   } = props;
   const colorString = themeColors[colorIndex];
@@ -147,6 +126,8 @@ function ShapeEditorPopoverComponent(props) {
         <ColorPicker
           triangle="hide"
           color={colorString}
+          activeColorIndex={activeColorIndex}
+          activeColorIndices={activeColorIndices}
           onChange={onColorChange}
         />
       </div>
@@ -186,8 +167,30 @@ function ShapeEditorPopoverComponent(props) {
       >
         Delete
       </Button>
-
-      <Caret caretPosition={caretPosition} color={darkColor} />
+      <div className={styles.startDelayContainer} style={{ backgroundColor: medColor }}>
+        <CustomSlider
+          min={0}
+          max={20}
+          step={0.1}
+          color={colorString}
+          vertical={false}
+          defaultValue={startOffset}
+          onChange={onStartOffsetChange}
+          label={
+            // same uncontrolled-handle / live-label pattern as TempoInput:
+            // the handle only reflects drags made on this slider itself,
+            // but the number below it tracks startOffset's own value
+            // (set elsewhere - e.g. a MIDI import's per-track entrance
+            // time - just as readily as a drag here would)
+            <div style={{ color: 'initial', lineHeight: 1.1, fontSize: '0.85em' }}>
+              <div>Start Delay</div>
+              <div style={{ fontSize: '0.85em', opacity: 0.85 }}>
+                {startOffset.toFixed(1)}s
+              </div>
+            </div>
+          }
+        />
+      </div>
     </div>
   );
 }

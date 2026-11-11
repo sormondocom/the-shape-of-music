@@ -1,73 +1,59 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
 import ShapeEditorPopoverComponent from './Component';
 
-const propTypes = {
-  position: PropTypes.shape({
-    x: PropTypes.number.isRequired,
-    y: PropTypes.number.isRequired,
-  }).isRequired,
-};
+const WIDTH = 225;
+const HEIGHT = 290;
+const TOP_PAD = 16;
+// Wider than TOP_PAD: the canvas's upper-left corner isn't actually "free"
+// - Sidebar's save/downloads/export tab buttons (left: 0, ~54px wide with
+// their box-shadow) live right there too. Clears them with a little
+// margin; keep this in sync with Sidebar/styles.module.css's `left` if
+// that changes.
+const LEFT_PAD = 110;
 
 /*
   Shape Editor Panel: appears when a shape is clicked on.
-  Used to adjust/mix the shape
+  Used to adjust/mix the shape.
+
+  Pinned to a fixed spot in the canvas's upper area rather than positioned
+  near the clicked shape - it used to follow the click position (in screen
+  pixels), which meant at any non-default zoom/pan the panel could end up
+  computed from a position far outside the viewport (the shape itself can
+  be anywhere on an effectively unbounded zoomable/pannable canvas),
+  pushing the panel off-screen entirely. A fixed spot is simple, always
+  visible, and immune to zoom/pan by construction - Portal (in
+  ComponentV2.jsx) still mounts this to document.body, so left/top below
+  are viewport-relative; #holder's own on-page offset is added so it lines
+  up with the actual canvas regardless of page layout (same pattern
+  already used by GroupSelectionPanel/ReferenceImage's action panel).
+  LEFT_PAD (rather than reusing TOP_PAD for both axes) keeps it clear of
+  the other fixed UI that also lives in that corner - see LEFT_PAD's own
+  comment.
 */
 class ShapeEditorPopover extends Component {
   constructor(props) {
     super(props);
 
-    const width = 225;
-    const height = 260;
-    const xPad = 23;
-    const yPad = 35;
-    let { x, y } = this.props.position;
-    y += yPad;
-
-    let caretTop = 40;
-    let isCaretLeft = true;
-
-    if (x + width + xPad > window.innerWidth) {
-      isCaretLeft = false;
-      x = x - width - xPad;
-    } else {
-      x = x + xPad;
-    }
-
-    // keep on screen
-    if (y + height > window.innerHeight) {
-      y = window.innerHeight - height - 15;
-      caretTop = this.props.position.y - y + 70;
-      if (caretTop > height - 20) {
-        caretTop = height - 20;
-      }
-    }
+    const holderEl = document.getElementById('holder');
+    const holderRect = holderEl
+      ? holderEl.getBoundingClientRect()
+      : { top: 0, left: 0 };
 
     this.state = {
       panelStyle: {
-        width,
-        height,
-        left: x,
-        top: y,
-      },
-      caretPosition: {
-        top: caretTop,
-        isLeft: isCaretLeft,
+        width: WIDTH,
+        height: HEIGHT,
+        left: holderRect.left + LEFT_PAD,
+        top: holderRect.top + TOP_PAD,
       },
     };
   }
 
   render() {
     return (
-      <ShapeEditorPopoverComponent
-        {...this.props}
-        panelStyle={this.state.panelStyle}
-        caretPosition={this.state.caretPosition}
-      />
+      <ShapeEditorPopoverComponent {...this.props} panelStyle={this.state.panelStyle} />
     );
   }
 }
-
-ShapeEditorPopover.propTypes = propTypes;
 
 export default ShapeEditorPopover;

@@ -1,0 +1,27 @@
+.staffScroll {
+  /* Each shape/layer is its own independent instrument, viewed and
+     followed independently - this is its own bounded, independently-
+     scrollable viewport (rather than relying on the shared modal body)
+     specifically so that when several layers are playing - and
+     auto-following - at once, scrolling one into view during playback
+     never drags another layer's box around with it. Deliberately no
+     cross-layer "which one should we scroll to" arbitration - scrolling
+     between layers (the outer modal body) stays a manual, independent
+     action; only staying caught up with a layer already in view is
+     automatic. */
+  overflow: auto;
+  max-width: 100%;
+  max-height: 360px;
+}
+
+@media print {
+  .staffScroll {
+    overflow: visible;
+  }
+}
+
+.empty {
+  padding: 16px 10px;
+  color: #888;
+  font-size: 0.85em;
+}

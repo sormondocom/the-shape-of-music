@@ -1,0 +1,46 @@
+.actionPanel {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.actionButton {
+  background: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 0.8em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.actionButton:hover {
+  background: #eee;
+}
+
+.actionButtonActive {
+  background: #333;
+  color: #fff;
+}
+
+.colorSwatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  cursor: pointer;
+}
+
+.selectionLabel {
+  color: #fff;
+  font-size: 0.8em;
+  align-self: center;
+  padding: 0 4px;
+  white-space: nowrap;
+}

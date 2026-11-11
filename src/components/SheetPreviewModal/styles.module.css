@@ -1,0 +1,114 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 299;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.panel {
+  position: fixed;
+  z-index: 300;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(800px, calc(100vw - 48px));
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  font-weight: bold;
+}
+
+.headerActions {
+  display: flex;
+  gap: 10px;
+}
+
+.headerActions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85em;
+  color: #555;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.body {
+  overflow-y: auto;
+  padding: 10px 14px;
+}
+
+.empty {
+  padding: 16px 0;
+  color: #888;
+  font-size: 0.9em;
+}
+
+.staffRow {
+  margin-bottom: 18px;
+}
+
+.staffLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+/*
+  Printing the modal as-is would print a fixed-position box clipped to one
+  screen's worth of content (position: fixed doesn't paginate) with buttons
+  and a backdrop nobody wants on paper. Let it flow as a normal in-page
+  document instead so the browser's print pagination can break across
+  physical pages naturally - this won't produce pixel-perfect page breaks
+  (a system can still split awkwardly across two printed pages), but it's
+  what makes "print this and hand it to someone" actually work at all.
+*/
+@media print {
+  .backdrop {
+    display: none;
+  }
+
+  .headerActions {
+    display: none;
+  }
+
+  .panel {
+    position: static;
+    width: auto;
+    max-height: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .body {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .staffRow {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Color from 'color';
 import { /* useStrictMode, */ Circle } from 'react-konva';
+import { useProjectContext } from 'context/useProjectContext';
 // useStrictMode(true);
 
 /*
@@ -15,12 +16,20 @@ function ShapeVertex(props) {
     handleVertexDelete,
     handleVertexDragMove,
   } = props;
+  const { stageScale } = useProjectContext();
   const luminosity = Color(color).luminosity();
   const lightenAmount = 1.8 * (1 - luminosity);
-  const defaultRadius = 6;
-  const hoverRadius = 8;
-  const strokeWidth = 2;
-  const [radius, setRadius] = useState(defaultRadius);
+  // counter-scale against the canvas zoom so handles stay a constant size
+  // on screen - otherwise they'd balloon up right along with vertex spacing
+  // on zoom, which doesn't actually make a dense cluster any more legible
+  const defaultRadius = 6 / stageScale;
+  const hoverRadius = 8 / stageScale;
+  const strokeWidth = 2 / stageScale;
+  // track hover as a flag rather than caching the computed radius itself -
+  // otherwise zooming while not hovering would leave a stale, un-rescaled
+  // radius until the next mouseover/mouseout
+  const [isHovered, setIsHovered] = useState(false);
+  const radius = isHovered ? hoverRadius : defaultRadius;
 
   // solid if first node, pale fill if not
   const fillColor =
@@ -44,8 +53,8 @@ function ShapeVertex(props) {
         // onMouseMove={() => console.log('vertex mouse move')}
         dragBoundFunc={dragBoundFunc}
         onDragMove={handleVertexDragMove}
-        onMouseOver={() => setRadius(hoverRadius)}
-        onMouseOut={() => setRadius(defaultRadius)}
+        onMouseOver={() => setIsHovered(true)}
+        onMouseOut={() => setIsHovered(false)}
         onDblClick={handleVertexDelete}
       />
     </>

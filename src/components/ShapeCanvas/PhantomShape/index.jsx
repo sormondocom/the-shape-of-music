@@ -20,11 +20,16 @@ const propTypes = {
   Used to show the shape that is currently being drawn. 
 */
 function PhantomShapeComponent(props) {
-  const { activeTool } = useProjectContext();
+  const { activeTool, stageScale } = useProjectContext();
   const { points, mousePos, color, closed } = props;
 
-  const radius = 4;
-  const strokeWidth = 2;
+  // counter-scale against zoom so the cursor dot and origin marker stay a
+  // constant on-screen size, same reasoning as every other handle this
+  // session (ShapeVertex.jsx, EdgeMidpoint.jsx, the progress dot) - these
+  // are plain fixed content-space radii otherwise, so they visibly balloon
+  // as you zoom in
+  const radius = 4 / stageScale;
+  const strokeWidth = 2 / stageScale;
   const previewFillOpacity = 0.1;
 
   const OriginPoint = () => (

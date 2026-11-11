@@ -1,0 +1,62 @@
+.track {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+}
+
+/* against a near-black dark-mode canvas, the light-mode rgba(0,0,0,...)
+   overlays would be nearly invisible - use a light overlay instead */
+.track.dark {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/*
+  Base offsets, assuming nothing else covers the bottom of the canvas -
+  index.jsx overrides `bottom` inline with a measured value whenever the
+  Color Controller footer / Spectrometer panel are actually present (see
+  Component.jsx's bottomChromeHeight), so these are just the fallback.
+*/
+.track.horizontal {
+  left: 0;
+  right: 12px; /* leave room for the vertical bar's corner */
+  bottom: 0;
+  height: 10px;
+}
+
+.track.vertical {
+  top: 0;
+  bottom: 12px;
+  right: 0;
+  width: 10px;
+}
+
+.thumb {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.28);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.thumb:hover,
+.thumb.dragging {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.thumb.dark {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.thumb.dark:hover,
+.thumb.dark.dragging {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.track.horizontal .thumb {
+  top: 0;
+  bottom: 0;
+}
+
+.track.vertical .thumb {
+  left: 0;
+  right: 0;
+}

@@ -9,7 +9,21 @@
     <meta name="theme-color" content="#242424" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.ico" />
-    <title>Shape Your Music</title>
+    <title>The Shape of Music</title>
+    <script>
+      // ResizeObserver's own spec-level throttling message ("loop completed with
+      // undelivered notifications") is harmless, but webpack-dev-server's error
+      // overlay treats it as a crash. Silence just that one message so dragging/
+      // resizing on the canvas doesn't pop up a blocking red screen in dev.
+      window.addEventListener('error', function(e) {
+        if (
+          e.message === 'ResizeObserver loop completed with undelivered notifications.' ||
+          e.message === 'ResizeObserver loop limit exceeded'
+        ) {
+          e.stopImmediatePropagation();
+        }
+      });
+    </script>
     <link
       href="https://fonts.googleapis.com/css?family=Inconsolata:400,700"
       rel="stylesheet"

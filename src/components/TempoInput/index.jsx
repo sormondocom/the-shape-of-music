@@ -27,7 +27,18 @@ function TempoInput(props) {
         vertical={false}
         defaultValue={value}
         onChange={onChange}
-        label={<span style={{ color: 'initial' }}>Tempo</span>}
+        label={
+          // CustomSlider's onChange fires continuously while dragging (not
+          // just on release), and that flows straight back into this
+          // `value` prop via the dispatch -> context round-trip in
+          // Toolbar/index.jsx - so this number tracks the slider live,
+          // even though the slider's own handle position is uncontrolled
+          // (defaultValue, not value) and manages itself internally.
+          <div style={{ color: 'initial', lineHeight: 1.15 }}>
+            <div>Tempo</div>
+            <div style={{ fontSize: '0.75em', opacity: 0.85 }}>{value}</div>
+          </div>
+        }
       />
     </div>
   );

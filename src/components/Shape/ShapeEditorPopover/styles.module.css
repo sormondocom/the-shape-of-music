@@ -1,12 +1,12 @@
 .ShapeEditorPopover {
   position: absolute;
   width: 225px;
-  height: 260px;
+  height: 290px;
   background: #fff;
   display: grid;
   grid-gap: 2px;
   grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: 30px auto 1fr 1fr 30px 30px;
+  grid-template-rows: 30px auto 1fr 1fr 30px 30px 30px;
   box-shadow: 1px 2px 19px rgba(0, 0, 0, 0.3);
 }
 
@@ -20,7 +20,13 @@
 }
 
 .sliderContainer {
-  grid-row: 1 / 7;
+  grid-row: 1 / 8;
+}
+
+.startDelayContainer {
+  grid-column: 2 / 4;
+  border-radius: 3px;
+  overflow: hidden;
 }
 
 .ShapeEditorPopover button {
@@ -29,18 +35,6 @@
   border: none;
   background: #c9563c;
   color: #fff;
-}
-
-.tooltipArrow {
-  display: block;
-  position: absolute;
-  top: 40px;
-  content: ' ';
-  height: 0;
-  width: 0;
-  pointer-events: none;
-  border: 10px solid rgba(255, 255, 255, 0);
-  margin-top: -10px;
 }
 
 .buttonShort {
@@ -65,14 +59,4 @@
 .colorPickerContainer button {
   width: 100%;
   height: 30px;
-}
-
-.arrowLeft {
-  right: 100%;
-  border-right-color: #fff;
-}
-
-.arrowRight {
-  left: 100%;
-  border-left-color: #fff;
 }

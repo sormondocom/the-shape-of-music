@@ -1,0 +1,20 @@
+.panel {
+  position: absolute;
+  left: 0;
+  /* bottom is set inline (index.jsx) - see utils/useMeasuredHeight.js */
+  z-index: 140;
+  background: rgba(255, 255, 255, 0.95);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.header {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
+.canvas {
+  display: block;
+}

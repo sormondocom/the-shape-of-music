@@ -8,19 +8,21 @@ const propTypes = {
   menuTop: PropTypes.bool,
   baseColor: PropTypes.string,
   title: PropTypes.string,
+  placeholder: PropTypes.string,
   value: PropTypes.string.isRequired,
   options: PropTypes.array.isRequired,
   onChange: PropTypes.func.isRequired,
 };
 
 function CustomSelect(props) {
-  const { value, options, onChange, menuTop, baseColor } = props;
+  const { value, options, onChange, menuTop, baseColor, placeholder } = props;
 
   return (
     <Select
       menuPlacement={menuTop ? 'top' : 'bottom'}
       styles={getSelectStyles(baseColor)}
       menuPortalTarget={document.body}
+      placeholder={placeholder}
       isSearchable={false}
       closeMenuOnScroll={true} // TODO: this isn't working on horizontal scroll
       components={{
