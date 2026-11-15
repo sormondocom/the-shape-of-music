@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import { object, string, number, array, bool, func } from 'prop-types';
+import { Typography } from 'antd';
 
 import { convertValToRange, dist } from 'utils/math';
 import { themeColors } from 'utils/color';
@@ -23,6 +24,7 @@ import {
   getGeoScrollbarMetrics,
   getGeoStagePosFromFraction,
 } from 'utils/geoTiles';
+import { MAX_IMPORTED_GEO_SHAPES } from 'utils/geoTrackImport';
 
 import withProjectContext from 'components/Project/withProjectContext';
 import Tone from 'tone';
@@ -32,6 +34,11 @@ export const DRAWING_STATES = {
   PREVIEW: 'preview', // mouse is hovered over final position, showing a preview of the finished shape
   DRAWING: 'drawing', // drawing but not previewing
 };
+
+// importGeoShapes mounts new shapes this many at a time rather than in one
+// setState - see that method's own comment on why.
+const GEO_IMPORT_MOUNT_CHUNK_SIZE = 20;
+const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
 
 /* Setup Tone Listener */
 Tone.Listener.upX = 0;
@@ -62,6 +69,8 @@ const propTypes = {
   imperativeHandlers: object,
   referenceImages: array,
   selectedReferenceImageId: string,
+  referenceGeoLayers: array,
+  selectedReferenceGeoLayerId: string,
   canvasMode: string.isRequired,
 };
 
@@ -155,6 +164,7 @@ class ShapeCanvas extends Component {
     this.clearAll = this.clearAll.bind(this);
     this.switchViewForMode = this.switchViewForMode.bind(this);
     this.commitZoom = this.commitZoom.bind(this);
+    this.finalizeInFlightZoomGesture = this.finalizeInFlightZoomGesture.bind(this);
     this.applyLiveZoomPreview = this.applyLiveZoomPreview.bind(this);
     this.recomputeVisibleShapes = this.recomputeVisibleShapes.bind(this);
 
@@ -187,6 +197,7 @@ class ShapeCanvas extends Component {
     this.zoomByStep = this.zoomByStep.bind(this);
     this.handleShapeClick = this.handleShapeClick.bind(this);
     this.handleShapeDelete = this.handleShapeDelete.bind(this);
+    this.handleShapesDelete = this.handleShapesDelete.bind(this);
 
     this.handleShapeColorChange = this.handleShapeColorChange.bind(this);
     this.handleShapeVolumeChange = this.handleShapeVolumeChange.bind(this);
@@ -199,6 +210,7 @@ class ShapeCanvas extends Component {
     this.setSoloedShapes = this.setSoloedShapes.bind(this);
     this.addToSoloedShapes = this.addToSoloedShapes.bind(this);
     this.clearSoloedShapes = this.clearSoloedShapes.bind(this);
+    this.centerOnReferenceGeoLayer = this.centerOnReferenceGeoLayer.bind(this);
   }
 
   componentDidMount() {
@@ -692,9 +704,40 @@ class ShapeCanvas extends Component {
     }));
 
     dispatch({ type: PROJECT_ACTIONS.SET_ACTIVE_TOOL, payload: TOOL_TYPES.EDIT });
-    showSuccessMessage(
-      `Imported ${rawPointsLists.length} shape${rawPointsLists.length === 1 ? '' : 's'} from MIDI`
-    );
+
+    const importedCount = `Imported ${rawPointsLists.length} shape${
+      rawPointsLists.length === 1 ? '' : 's'
+    } from MIDI`;
+    // These shapes always land in musical canvas space (the offsetX/offsetY
+    // math above), regardless of which mode was active when the file was
+    // imported - so if the user was looking at the geographic canvas, the
+    // import just happened somewhere they can't currently see. Give them a
+    // one-click way out instead of leaving them to find CanvasModeToggle
+    // themselves.
+    if (this.props.canvasMode === CANVAS_MODES.GEOGRAPHIC) {
+      showSuccessMessage(
+        <span>
+          {importedCount}.{' '}
+          <Typography.Link
+            // Typography.Link's antd default (its own theme blue, no
+            // underline) doesn't read as clickable at a glance inside a
+            // toast - classic browser link blue + underline is what
+            // actually says "link" the way people expect
+            style={{ color: '#0000EE', textDecoration: 'underline' }}
+            onClick={() =>
+              dispatch({ type: PROJECT_ACTIONS.SET_CANVAS_MODE, payload: CANVAS_MODES.MUSICAL })
+            }
+          >
+            Switch to musical canvas to see it
+          </Typography.Link>
+        </span>,
+        // longer than the default 3s - this one has a link to actually
+        // click, not just text to read
+        6
+      );
+    } else {
+      showSuccessMessage(importedCount);
+    }
   }
 
   // GPS/GIS vector import (geographic mode: GPX/KML/GeoJSON/Shapefile) -
@@ -714,17 +757,26 @@ class ShapeCanvas extends Component {
   // the camera flies to frame whatever just got imported, since its real
   // location could be anywhere on Earth relative to wherever the map
   // happened to be pointed before the import.
-  importGeoShapes(rawPointsLists, colorIndexForTrack, sourceLabel) {
+  // Returns a result descriptor rather than messaging the user directly -
+  // Toolbar's handleGeoFileChange builds a detailed GeoImportLogModal log
+  // from this (and from its own earlier parsing steps), rather than this
+  // method firing its own toast the caller has no way to fold into that.
+  async importGeoShapes(rawPointsLists, colorIndexForTrack) {
     const { activeColorIndex, dispatch } = this.props;
 
     if (!rawPointsLists.length) {
-      showErrorMessage('No usable tracks found in that file');
-      return;
+      return { ok: false, reason: 'No usable tracks found in that file' };
     }
 
-    const shapesList = this.state.shapesList.slice();
-    const deletedShapeIndeces = this.state.deletedShapeIndeces.slice();
-    const newShapeIndices = new Set();
+    // Truncate rather than reject outright - a route/track file (GPX/KML/
+    // GeoJSON) almost never hits this, and a shapefile that does still
+    // becomes a usable (if partial) import instead of nothing at all. See
+    // MAX_IMPORTED_GEO_SHAPES' own comment for why this guard exists.
+    const totalFound = rawPointsLists.length;
+    if (totalFound > MAX_IMPORTED_GEO_SHAPES) {
+      rawPointsLists = rawPointsLists.slice(0, MAX_IMPORTED_GEO_SHAPES);
+      colorIndexForTrack = colorIndexForTrack && colorIndexForTrack.slice(0, MAX_IMPORTED_GEO_SHAPES);
+    }
 
     let minX = Infinity;
     let minY = Infinity;
@@ -748,43 +800,109 @@ class ShapeCanvas extends Component {
       canvasHeight
     );
 
-    // Same normalization issue as hand-drawing directly on the map
-    // (appendShape's own comment) - these tracks' raw coordinates are
-    // real Web-Mercator world pixels, far too small a magnitude for the
-    // duration math to produce sane note lengths from directly. Using
-    // the stageScale the camera just framed them AT means "how big this
-    // route looks once you can actually see the whole thing" drives the
-    // duration, the same "how big it looked on screen" principle
-    // appendShape uses for a hand-drawn shape - and since every track
-    // from this import shares that one framing scale, their RELATIVE
-    // real-world sizes still come through as relatively faster/slower,
-    // same as musical mode's existing "bigger shape plays slower" feel.
-    rawPointsLists.forEach((points, trackIndex) => {
-      const colorIndex = colorIndexForTrack ? colorIndexForTrack[trackIndex] : activeColorIndex;
-      newShapeIndices.add(shapesList.length);
-      shapesList.push({
-        points,
-        colorIndex,
-        volume: this.defaultVolume,
-        isMuted: false,
-        audioScale: stageScale,
-      });
-      deletedShapeIndeces.push(0);
-    });
-
+    // The eventual full group, selected up front - cheap, and doesn't need
+    // to wait for the shapes below to actually exist yet.
+    const baseShapeIndex = this.state.shapesList.length;
+    const newShapeIndices = new Set();
+    for (let i = 0; i < rawPointsLists.length; i++) {
+      newShapeIndices.add(baseShapeIndex + i);
+    }
     this.setState({
-      shapesList,
-      deletedShapeIndeces,
-      selectedShapeIndex: -1,
-      selectedShapeIndices: newShapeIndices,
       stageScale,
       stagePos,
+      selectedShapeIndex: -1,
+      selectedShapeIndices: newShapeIndices,
     });
 
+    // Mounted in batches rather than one setState with the whole list.
+    // Every NEW shape triggers Shape/useShapeSynth.js's mount-time Synth
+    // construction (a Tone.Part, plus a full synth/panner/gain chain for
+    // non-SF2 colors) UNCONDITIONALLY - not gated by viewport culling the
+    // way rendering is - and React flushes every newly-mounted shape's
+    // effects together, in one synchronous pass, after each commit. A
+    // single setState carrying hundreds or thousands of new shapes means
+    // hundreds or thousands of those constructions happen with zero yield
+    // in between, which is exactly what trips a browser's "page
+    // unresponsive" dialog even though Toolbar's handleGeoFileChange has
+    // already kept the POINTS-per-shape math itself cheap and yielded.
+    // Batching the mount itself, separately, is what actually keeps the
+    // tab responsive regardless of shape COUNT - at the cost of the import
+    // taking longer in wall-clock time, shapes appearing progressively
+    // rather than all at once.
+    for (let i = 0; i < rawPointsLists.length; i += GEO_IMPORT_MOUNT_CHUNK_SIZE) {
+      const batchPoints = rawPointsLists.slice(i, i + GEO_IMPORT_MOUNT_CHUNK_SIZE);
+      const batchColors =
+        colorIndexForTrack && colorIndexForTrack.slice(i, i + GEO_IMPORT_MOUNT_CHUNK_SIZE);
+      this.setState(s => {
+        const shapesList = s.shapesList.slice();
+        const deletedShapeIndeces = s.deletedShapeIndeces.slice();
+        // Same normalization issue as hand-drawing directly on the map
+        // (appendShape's own comment) - these tracks' raw coordinates are
+        // real Web-Mercator world pixels, far too small a magnitude for
+        // the duration math to produce sane note lengths from directly.
+        // Using the stageScale the camera just framed them AT means "how
+        // big this route looks once you can actually see the whole
+        // thing" drives the duration - and since every track from this
+        // import shares that one framing scale, their RELATIVE real-world
+        // sizes still come through as relatively faster/slower, same as
+        // musical mode's existing "bigger shape plays slower" feel.
+        batchPoints.forEach((points, j) => {
+          const colorIndex = batchColors ? batchColors[j] : activeColorIndex;
+          shapesList.push({
+            points,
+            colorIndex,
+            volume: this.defaultVolume,
+            isMuted: false,
+            audioScale: stageScale,
+          });
+          deletedShapeIndeces.push(0);
+        });
+        return { shapesList, deletedShapeIndeces };
+      });
+      if (i + GEO_IMPORT_MOUNT_CHUNK_SIZE < rawPointsLists.length) {
+        await yieldToMain();
+      }
+    }
+
     dispatch({ type: PROJECT_ACTIONS.SET_ACTIVE_TOOL, payload: TOOL_TYPES.EDIT });
-    showSuccessMessage(
-      `Imported ${rawPointsLists.length} shape${rawPointsLists.length === 1 ? '' : 's'} from ${sourceLabel}`
+    return { ok: true, importedCount: rawPointsLists.length, totalFound };
+  }
+
+  // LayersPanel's right-click "Center" item for a reference geo layer
+  // (ReferenceGeoLayer) - same frameGeoBounds camera-fly used when the
+  // layer was first imported (importGeoShapes above), just re-run on
+  // demand against that layer's own tracks rather than whatever was just
+  // placed. Writes directly to stageScale/stagePos regardless of the
+  // current canvasMode, same as importGeoShapes already does - a
+  // reference layer's content lives in the same world-pixel content-space
+  // either way (see utils/geoTrackImport.js's toPoints), so framing it
+  // isn't actually mode-dependent.
+  centerOnReferenceGeoLayer(id) {
+    const layer = (this.props.referenceGeoLayers || []).find(l => l.id === id);
+    if (!layer) return;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    layer.tracks.forEach(points => {
+      for (let i = 0; i < points.length; i += 2) {
+        minX = Math.min(minX, points[i]);
+        maxX = Math.max(maxX, points[i]);
+        minY = Math.min(minY, points[i + 1]);
+        maxY = Math.max(maxY, points[i + 1]);
+      }
+    });
+    if (minX === Infinity) return;
+
+    const canvasWidth = getCanvasWidth();
+    const canvasHeight = window.innerHeight - 80 - this.state.bottomChromeHeight;
+    const { stageScale, stagePos } = frameGeoBounds(
+      { minX, minY, maxX, maxY },
+      canvasWidth,
+      canvasHeight
     );
+    this.setState({ stageScale, stagePos });
   }
 
   traceReferenceImage(imageEl, regionRect, referenceImage) {
@@ -1013,6 +1131,23 @@ class ShapeCanvas extends Component {
   // React/Konva have actually redrawn) rather than right away, so there's
   // no single frame where the preview's gone but the real content hasn't
   // caught up yet.
+  // Shared guard for keyboard-driven movement (panByKeyboard, zoomByStep) -
+  // handleWheel's commitZoom is deferred ~150ms after the last wheel event
+  // so a fast scroll's successive ticks don't each trigger their own
+  // expensive recompute. If keyboard panning/zooming starts while that's
+  // still pending, finalizing it into state right now - rather than
+  // leaving it scheduled - stops it from firing LATER and silently
+  // overwriting wherever the keyboard already moved to in the meantime
+  // (visibly: pan smoothly, then stutter back to the pre-wheel position
+  // a moment later). Exactly the same race resetZoom's own comment
+  // already describes; this just covers the two call sites that didn't
+  // have the guard. A no-op when no wheel gesture is actually in flight
+  // (commitZoom's own liveStageScale == null check).
+  finalizeInFlightZoomGesture() {
+    clearTimeout(this.zoomSettleTimeoutId);
+    this.commitZoom();
+  }
+
   commitZoom() {
     if (this.liveStageScale == null) return;
     const container = this.shapeCanvas.getStage().container();
@@ -1051,6 +1186,7 @@ class ShapeCanvas extends Component {
   // `direction` is +1 (in) or -1 (out); `dt` (seconds) makes this
   // frame-rate independent for continuous zoom while the key is held.
   zoomByStep(direction, dt) {
+    this.finalizeInFlightZoomGesture();
     const { stageScale: oldScale, stagePos } = this.state;
     const isGeoMode = this.props.canvasMode === CANVAS_MODES.GEOGRAPHIC;
     const MIN_SCALE = isGeoMode ? Math.pow(2, MIN_GEO_ZOOM) : 0.3;
@@ -1081,6 +1217,7 @@ class ShapeCanvas extends Component {
   // handleWheel) - a fixed on-screen step per key press, independent of
   // zoom level, so panning feels consistent whether zoomed in or out
   panByKeyboard(dx, dy) {
+    this.finalizeInFlightZoomGesture();
     const { stagePos } = this.state;
     this.setState({
       stagePos: { x: stagePos.x + dx, y: stagePos.y + dy },
@@ -1194,11 +1331,53 @@ class ShapeCanvas extends Component {
     }
   }
 
+  // Also clears the deleted index out of selection state - otherwise
+  // selectedShapeIndex/selectedShapeIndices keeps pointing at a shape
+  // that no longer exists (deletedShapeIndeces masks it out of
+  // rendering/LayersPanel, but the stale index is still sitting in
+  // state), which is exactly the "leftover selection" this guards
+  // against. Covers every caller of this method, not just LayersPanel's
+  // own row button - deleteSelectedShape (the Delete-key/canvas path)
+  // calls this with selectedShapeIndex itself, so it benefits the same way.
   handleShapeDelete(index) {
     const deletedShapeIndeces = this.state.deletedShapeIndeces.slice();
     deletedShapeIndeces[index] = true;
 
-    this.setState({ deletedShapeIndeces });
+    this.setState(s => {
+      const selectedShapeIndices = new Set(s.selectedShapeIndices);
+      selectedShapeIndices.delete(index);
+      return {
+        deletedShapeIndeces,
+        selectedShapeIndex: s.selectedShapeIndex === index ? -1 : s.selectedShapeIndex,
+        selectedShapeIndices,
+      };
+    });
+  }
+
+  // LayersPanel's right-click context menu "Delete" item - acts on a
+  // whole multi-selected group at once (getContextMenuTargets' same
+  // all-or-one-row logic Play Alone/Add to Solo already use), one
+  // setState rather than one handleShapeDelete call per index: looping
+  // the single-index version here would have each call read the same
+  // not-yet-flushed this.state.deletedShapeIndeces, so only the LAST
+  // index in the loop would actually end up marked deleted. Same
+  // leftover-selection cleanup as handleShapeDelete above, just for every
+  // index in the group at once.
+  handleShapesDelete(indices) {
+    const deletedShapeIndeces = this.state.deletedShapeIndeces.slice();
+    indices.forEach(index => {
+      deletedShapeIndeces[index] = true;
+    });
+
+    this.setState(s => {
+      const selectedShapeIndices = new Set(s.selectedShapeIndices);
+      indices.forEach(index => selectedShapeIndices.delete(index));
+      return {
+        deletedShapeIndeces,
+        selectedShapeIndex: indices.has(s.selectedShapeIndex) ? -1 : s.selectedShapeIndex,
+        selectedShapeIndices,
+      };
+    });
   }
 
   handleShapeSoloChange(index) {
@@ -1445,6 +1624,8 @@ class ShapeCanvas extends Component {
           stageScale={stageScale}
           stagePos={stagePos}
           onResetZoom={this.resetZoom}
+          onPanByStep={this.panByKeyboard}
+          onZoomByStep={this.zoomByStep}
           horizontalScrollbar={horizontalScrollbar}
           verticalScrollbar={verticalScrollbar}
           onPanScrollbarChange={this.handlePanScrollbarChange}
@@ -1483,6 +1664,7 @@ class ShapeCanvas extends Component {
           onSoloChange={this.handleShapeSoloChange}
           onNameChange={this.handleShapeNameChange}
           onDelete={this.handleShapeDelete}
+          onDeleteSelected={this.handleShapesDelete}
           onSelectAll={this.selectAllShapes}
           onClearSelection={this.clearGroupSelection}
           onPlayAlone={this.setSoloedShapes}
@@ -1499,6 +1681,33 @@ class ShapeCanvas extends Component {
           onDeleteReferenceImage={id =>
             this.props.dispatch({
               type: PROJECT_ACTIONS.REMOVE_REFERENCE_IMAGE,
+              payload: id,
+            })
+          }
+          referenceGeoLayers={this.props.referenceGeoLayers}
+          selectedReferenceGeoLayerId={this.props.selectedReferenceGeoLayerId}
+          onSelectReferenceGeoLayer={id =>
+            this.props.dispatch({
+              type: PROJECT_ACTIONS.SET_SELECTED_REFERENCE_GEO_LAYER,
+              payload: id,
+            })
+          }
+          onDeleteReferenceGeoLayer={id =>
+            this.props.dispatch({
+              type: PROJECT_ACTIONS.REMOVE_REFERENCE_GEO_LAYER,
+              payload: id,
+            })
+          }
+          onRenameReferenceGeoLayer={id => sourceLabel =>
+            this.props.dispatch({
+              type: PROJECT_ACTIONS.RENAME_REFERENCE_GEO_LAYER,
+              payload: { id, sourceLabel },
+            })
+          }
+          onCenterReferenceGeoLayer={this.centerOnReferenceGeoLayer}
+          onToggleReferenceGeoLayerVisibility={id =>
+            this.props.dispatch({
+              type: PROJECT_ACTIONS.TOGGLE_REFERENCE_GEO_LAYER_VISIBILITY,
               payload: id,
             })
           }

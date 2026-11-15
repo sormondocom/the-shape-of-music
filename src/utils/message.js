@@ -18,9 +18,10 @@ export const showErrorMessage = error => {
   });
 };
 
-export const showSuccessMessage = content => {
+export const showSuccessMessage = (content, duration) => {
   message.success({
     content,
     key: MESSAGE_KEY,
+    duration,
   });
 };

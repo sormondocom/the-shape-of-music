@@ -29,7 +29,7 @@ Using this app, one can:
 - Use grid and syncing options to create defined rhythms and loops
 - Move shapes up or down to transpose them within the scale, or side to side to move them in stereo space
 - Record and export your project as either an audio file or as MIDI files
-- Save projects and browse other people's creations
+- Save and open projects as local `.geob` files - no account, no cloud, nothing to depend on but your own disk
 
 ---
 
@@ -147,32 +147,15 @@ It uses:
 - [Teoria](https://github.com/saebekassebil/teoria) for music theory logic
 - [Ant Design](https://ant.design/docs/react/introduce) for several UI components
 
+To run: `yarn` and then `yarn start:app` (or just `yarn start` - they're the same thing).
 
-To run: `yarn` and then `yarn start:app`.
-
-### Backend
-_NOTE: If you just want to play around with the client code, you can ignore this setup. Just use `yarn start:app`_
-
-The backend consists of a [Firestore database](https://firebase.google.com/docs/firestore) and serverless [Netlify functions](https://www.netlify.com/docs/functions/) (in [`netlify/functions`](netlify/functions)) to provide an API for viewing and saving projects. It uses [Netlify Identity](https://www.netlify.com/docs/identity/) to handle users, account creation and login.
-
-> This fork originally inherited a FaunaDB backend from the upstream project and has since migrated to
-> Firestore (see `scripts/import-fauna-data-to-firestore.js`) - if you're looking at older forks or the
-> upstream repo, their backend setup will differ from what's below.
-
-If you want to be able to save data locally, you will need a [Firebase project](https://console.firebase.google.com/) (it's free) with Firestore enabled, and a service account key for it.
-
-If everything is already setup, run with `yarn start:server`.
-
-#### Firestore Setup
-1. Create a project at the [Firebase console](https://console.firebase.google.com/).
-2. In that project, enable **Firestore Database** (Build > Firestore Database > Create database).
-3. Go to **Project Settings > Service Accounts**, and click **Generate new private key**. This downloads a JSON file - keep it secret, it's a credential.
-4. In your local environment (NOTE: this will NOT be your react app `.env` file. This will be your `~/.bash_profile`, `~/.zshrc`, etc.), set a variable `FIREBASE_ADMIN_CREDENTIALS` to the **entire contents** of that JSON file, as a single-line string.
-5. Reload your terminal session and run `yarn start:server`.
-
-#### Netlify Setup
-Netlify is used to handle user accounts through their [Identity](https://www.netlify.com/docs/identity/) feature. To fully integrate with the backend and be able to save your projects locally, you will need a Netlify account. Once you have an account, use their [CLI](https://www.netlify.com/docs/cli/) to login and initialize a project for this repo. Try signing up through the UI and you should get a confirmation email that redirects to your netlify project.
-
+### No Backend
+There isn't one, deliberately. This fork originally inherited a FaunaDB-then-Firestore backend (account
+login, a cloud project list, "save" meaning a database write) from the upstream project - all of that has
+been removed. A project is just a `.geob` file on your own disk: Save writes one through your browser's
+real Save As dialog, Open reads one back in, and nothing about either ever depends on a server, an account,
+or a service that might not be there next year. If you're looking at older forks or the upstream repo, their
+setup (and the backend section that used to be here) will look very different from this.
 
 ### Testing
 

@@ -8,31 +8,42 @@ import styles from './styles.module.css';
   A small, always-on label for "what am I currently working on" - sits
   between the toolbar and the Sidebar's save/export tabs, left-aligned.
 
-  Before this, the only place a project's name showed up at all
-  (Project/index.jsx's top-center ProjectTitle) only rendered when BOTH a
-  projectAuthor AND a projectName existed - i.e. a saved, attributed
-  project. Two common states had nothing on screen naming the work at
-  all: a freshly imported MIDI file (which now sets projectName to the
-  file's own name - see Toolbar's handleMidiFileChange - but that name
-  had nowhere to actually show up), and a brand new, never-saved project
-  (no name at all). This always renders, falling back to "Untitled
-  Project" in that second case, so there's never a moment where it's
-  unclear what's currently open.
+  Two distinct things live here, deliberately styled apart:
+  - projectName: this app's own .geob project name (or "Untitled
+    Project") - the thing Save/Open actually read and write.
+  - importedFileNames: the source file(s) (MIDI, geo tracks) the current
+    canvas was built from - never the same thing as the project name (see
+    utils/project.js's ADD_IMPORTED_FILE_NAME/SET_IMPORTED_FILE_NAMES),
+    shown indented underneath in a clearly different (smaller, italic,
+    monospace) style so the two are never mistaken for each other.
+
+  Sidebar's own top offset (utils/project.js's getSidebarTopOffset) grows
+  with importedFileNames.length to stay below however tall this renders.
 */
 function FileNameBadge() {
-  const { projectName } = useProjectContext();
+  const { projectName, importedFileNames } = useProjectContext();
   const { isDarkMode } = useColorThemeContext();
 
   return (
     <div
       className={styles.badge}
-      title={projectName || 'Untitled Project'}
       style={{
         color: isDarkMode ? appColors.grayLightest : undefined,
         background: isDarkMode ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.75)',
       }}
     >
-      {projectName || 'Untitled Project'}
+      <div className={styles.projectName} title={projectName || 'Untitled Project'}>
+        {projectName || 'Untitled Project'}
+      </div>
+      {importedFileNames.length > 0 && (
+        <div className={styles.importedFiles}>
+          {importedFileNames.map((fileName, i) => (
+            <div key={`${fileName}-${i}`} className={styles.importedFile} title={fileName}>
+              {fileName}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

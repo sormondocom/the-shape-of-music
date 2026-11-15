@@ -12,6 +12,25 @@ import {
   SF2_DYNAMIC_PARAMS,
 } from 'utils/sf2Engine';
 
+// Every live (non-SF2) Synth instance, for silenceAllSynths below - the
+// PlayBar Stop button's hard-cutoff. SF2-backed colors have no entry here
+// (synth stays null for them - see isSf2 throughout this file); those are
+// silenced separately by utils/sf2Engine.js's own stopAllNotes, which
+// Project/useAudioOutput.js's stop() already calls alongside this.
+const activeSynths = new Set();
+
+// Transport.stop() only stops SCHEDULING future notes - a note already
+// triggered (synth.triggerAttackRelease in the Tone.Part callback below)
+// runs its own envelope on real AudioContext time, entirely independent
+// of Transport state once it's fired. A sustained instrument (a long
+// soundDuration - a held pad/organ note) can keep ringing well after Stop
+// is pressed with nothing else telling it to release early. This is that
+// "something else" - forces every currently-sounding non-SF2 synth to
+// release right now, regardless of its own scheduled noteOff time.
+export const silenceAllSynths = () => {
+  activeSynths.forEach(synthApi => synthApi.silence());
+};
+
 export function Synth({ onStartLoading, onEndLoading }) {
   console.log('Synth constructed');
 
@@ -144,7 +163,16 @@ export function Synth({ onStartLoading, onEndLoading }) {
     synth = null;
   };
 
-  return {
+  const api = {
+    // The PlayBar Stop button's hard-cutoff (silenceAllSynths above) -
+    // releases whatever note is currently sounding immediately, without
+    // disposing anything (unlike disposeSynth, which this shape's own
+    // instrument-swap/unmount path uses). A no-op for an SF2-backed shape
+    // (synth stays null) - those are handled by the SF2 engine's own
+    // panic instead.
+    silence: () => {
+      if (synth) synth.triggerRelease();
+    },
     setVolume: newVol => {
       volume = newVol;
       if (isSf2) {
@@ -463,8 +491,12 @@ export function Synth({ onStartLoading, onEndLoading }) {
       return schedule[0];
     },
     dispose: () => {
+      activeSynths.delete(api);
       part.dispose();
       if (synth) disposeSynth();
     },
   };
+
+  activeSynths.add(api);
+  return api;
 }

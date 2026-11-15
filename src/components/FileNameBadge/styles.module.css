@@ -3,15 +3,39 @@
   z-index: 190;
   left: 0;
   top: 80px;
-  max-width: 220px;
+  max-width: 260px;
   padding: 6px 14px;
+  border-radius: 0 0 5px 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+  user-select: none;
+}
+
+.projectName {
   font-size: 0.85em;
   font-weight: bold;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-radius: 0 0 5px 0;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  pointer-events: none;
-  user-select: none;
+}
+
+/* Deliberately a different typeface (monospace) and style (italic,
+   smaller, dimmer) from .projectName above - these are source files, not
+   the project itself, and should never read as the same kind of label. */
+.importedFiles {
+  margin-top: 2px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(128, 128, 128, 0.4);
+}
+
+.importedFile {
+  font-family: 'Courier New', Courier, monospace;
+  font-style: italic;
+  font-weight: normal;
+  font-size: 0.72em;
+  line-height: 18px;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

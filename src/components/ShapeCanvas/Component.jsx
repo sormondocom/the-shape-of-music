@@ -10,8 +10,10 @@ import ShapesWrapper from './ShapesWrapper';
 import PhantomShape from './PhantomShape';
 import Grid from './Grid';
 import ReferenceImage from './ReferenceImage';
+import ReferenceGeoLayer from './ReferenceGeoLayer';
 import GroupSelectionPanel from './GroupSelectionPanel';
 import PanScrollbar from './PanScrollbar';
+import ZoomPanControls from './ZoomPanControls';
 import GeoBaseLayer from './GeoBaseLayer';
 import { appColors, themeColors } from 'utils/color';
 import { PROJECT_ACTIONS, TOOL_TYPES, CANVAS_MODES } from 'utils/project';
@@ -47,6 +49,16 @@ const ZOOM_BADGE_ACTIVE_STYLE = {
   opacity: 1,
 };
 
+// ZoomPanControls' click targets, in the same units/convention as their
+// keyboard equivalents (Container.jsx's panByKeyboard/zoomByStep) - a
+// click is just one discrete step through that same path, not a
+// separate implementation. PAN_CLICK_STEP_PX: screen pixels, same as a
+// few frames of held-WASD at PAN_SPEED (Project/index.jsx). ZOOM_CLICK_DT:
+// handed to zoomByStep's own dt parameter as if a key had been held for
+// this many (fake) seconds - 2.2^0.3 ≈ 1.27, a ~27% zoom per click.
+const PAN_CLICK_STEP_PX = 80;
+const ZOOM_CLICK_DT = 0.3;
+
 function ShapeCanvasComponent(props, ref) {
   const {
     width,
@@ -69,6 +81,8 @@ function ShapeCanvasComponent(props, ref) {
     stageScale,
     stagePos,
     onResetZoom,
+    onPanByStep,
+    onZoomByStep,
     horizontalScrollbar,
     verticalScrollbar,
     onPanScrollbarChange,
@@ -202,6 +216,8 @@ function ShapeCanvasComponent(props, ref) {
     proximityModeRadius,
     referenceImages,
     selectedReferenceImageId,
+    referenceGeoLayers,
+    selectedReferenceGeoLayerId,
     canvasMode,
     dispatch,
   } = projectContext;
@@ -220,21 +236,19 @@ function ShapeCanvasComponent(props, ref) {
   const isEditMode = activeTool === TOOL_TYPES.EDIT;
 
   // top-left of the group selection's combined bounds, to anchor the bulk
-  // recolor panel - approximate (uses each shape's last-synced points, not
-  // any in-progress unsaved drag), which is fine for positioning a panel
+  // recolor panel - asks each selected shape's own LIVE getContentBounds
+  // (ShapesWrapper.jsx's getContentBoundsForIndices), not shapesList's raw
+  // points directly: a shape dragged since import/creation has moved at
+  // the Konva level without shapesList ever being updated to match, so
+  // reading points alone used a stale position - fine at scale 1, but
+  // the resulting screen-space error grows with zoom (it's a fixed
+  // content-space gap multiplied by stageScale), which is what actually
+  // read as "the panel drifts away the more you zoom in".
   let groupSelectionTopLeft = null;
-  if (selectedShapeIndices.size > 0) {
-    let minX = Infinity;
-    let minY = Infinity;
-    selectedShapeIndices.forEach(index => {
-      const shape = shapesList[index];
-      if (!shape) return;
-      for (let i = 0; i < shape.points.length; i += 2) {
-        minX = Math.min(minX, shape.points[i]);
-        minY = Math.min(minY, shape.points[i + 1]);
-      }
-    });
-    if (minX !== Infinity) {
+  if (selectedShapeIndices.size > 0 && shapesGroupRef.current.getContentBoundsForIndices) {
+    const bounds = shapesGroupRef.current.getContentBoundsForIndices(selectedShapeIndices);
+    if (bounds) {
+      const { minX, minY } = bounds;
       // convert content coordinates to screen-relative coordinates through
       // the stage's current zoom/pan, so the panel stays anchored to the
       // shapes at any zoom level (identity transform at scale=1/pos=0)
@@ -333,6 +347,12 @@ function ShapeCanvasComponent(props, ref) {
                 height={height}
               />
             )}
+
+            <ReferenceGeoLayer
+              referenceGeoLayers={referenceGeoLayers}
+              selectedReferenceGeoLayerId={selectedReferenceGeoLayerId}
+              stageScale={stageScale}
+            />
 
             {isProximityModeActive && (
               <Layer>
@@ -469,33 +489,44 @@ function ShapeCanvasComponent(props, ref) {
         positionFraction={verticalScrollbar.positionFraction}
         onChange={fraction => onPanScrollbarChange('y', fraction)}
       />
-      <div
-        ref={zoomBadgeRef}
-        title="Scroll to zoom - click to reset"
-        onClick={onResetZoom}
-        style={{
-          position: 'absolute',
-          // #holder is now sized (ShapeCanvas/Container.jsx's canvasHeight)
-          // to end exactly at the Color Controller footer/Spectrometer
-          // panel's top edge - no bottomChromeHeight offset needed here
-          // any more, just the usual breathing room above the bar.
-          zIndex: 150,
-          bottom: 20,
-          right: 18,
-          borderRadius: 4,
-          cursor: 'pointer',
-          userSelect: 'none',
-          color: isDarkMode ? appColors.grayLight : appColors.grayDark,
-          background: isDarkMode ? appColors.black : appColors.grayLight,
-          // grow/shrink smoothly between ZOOM_BADGE_DEFAULT_STYLE and
-          // ZOOM_BADGE_ACTIVE_STYLE (setZoomActive, applied imperatively
-          // while a wheel gesture is in progress) rather than snapping
-          transition: 'font-size 0.15s, padding 0.15s, opacity 0.15s',
-          ...ZOOM_BADGE_DEFAULT_STYLE,
-        }}
+      <ZoomPanControls
+        isDarkMode={isDarkMode}
+        onPanUp={() => onPanByStep(0, PAN_CLICK_STEP_PX)}
+        onPanDown={() => onPanByStep(0, -PAN_CLICK_STEP_PX)}
+        onPanLeft={() => onPanByStep(PAN_CLICK_STEP_PX, 0)}
+        onPanRight={() => onPanByStep(-PAN_CLICK_STEP_PX, 0)}
+        onZoomIn={() => onZoomByStep(1, ZOOM_CLICK_DT)}
+        onZoomOut={() => onZoomByStep(-1, ZOOM_CLICK_DT)}
       >
-        {isGeoMode ? `Z${Math.round(Math.log2(stageScale))}` : `${Math.round(stageScale * 100)}%`}
-      </div>
+        <div
+          ref={zoomBadgeRef}
+          title="Scroll to zoom - click to reset"
+          onClick={onResetZoom}
+          style={{
+            borderRadius: 4,
+            cursor: 'pointer',
+            userSelect: 'none',
+            color: isDarkMode ? appColors.grayLight : appColors.grayDark,
+            background: isDarkMode ? appColors.black : appColors.grayLight,
+            // same real border as ZoomPanControls' own buttons (that
+            // file's styles.module.css) - this badge sits right between
+            // them in the same cluster, so it needs the same outline to
+            // read as part of one control group rather than one bordered
+            // pair of buttons with an unbordered label floating between.
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.45)'}`,
+            boxShadow: isDarkMode
+              ? '0 1px 2px rgba(0, 0, 0, 0.5)'
+              : '0 1px 2px rgba(0, 0, 0, 0.25)',
+            // grow/shrink smoothly between ZOOM_BADGE_DEFAULT_STYLE and
+            // ZOOM_BADGE_ACTIVE_STYLE (setZoomActive, applied imperatively
+            // while a wheel gesture is in progress) rather than snapping
+            transition: 'font-size 0.15s, padding 0.15s, opacity 0.15s',
+            ...ZOOM_BADGE_DEFAULT_STYLE,
+          }}
+        >
+          {isGeoMode ? `Z${Math.round(Math.log2(stageScale))}` : `${Math.round(stageScale * 100)}%`}
+        </div>
+      </ZoomPanControls>
     </div>
   );
 }

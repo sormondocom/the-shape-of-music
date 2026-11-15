@@ -72,6 +72,28 @@ export default memo(
         });
         return visible;
       },
+      // ShapeCanvas/Component.jsx's group-selection panel anchor - same
+      // "ask each shape's own LIVE getContentBounds, not the shapesList
+      // prop" reasoning as getVisibleShapeIndices above. Using the raw
+      // points in shapesList instead (what this used to do) is wrong for
+      // any selected shape that's been dragged since import/creation: the
+      // gap between where shapesList THINKS it is and where it actually
+      // is stays fixed in content-space, but the panel's on-screen
+      // position is that content-space point times the current zoom - so
+      // the more you zoom in, the further off-screen the panel drifts,
+      // even though nothing about the selection itself changed.
+      getContentBoundsForIndices: indices => {
+        let minX = Infinity;
+        let minY = Infinity;
+        indices.forEach(index => {
+          const shapeRef = shapeRefs.current[index.toString()];
+          if (!shapeRef) return;
+          const bounds = shapeRef.getContentBounds();
+          minX = Math.min(minX, bounds.minX);
+          minY = Math.min(minY, bounds.minY);
+        });
+        return minX === Infinity ? null : { minX, minY };
+      },
     }));
 
     return shapesList.map((shape, index) => {

@@ -1,0 +1,86 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 299;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.panel {
+  position: fixed;
+  z-index: 300;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.header {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+  font-weight: bold;
+}
+
+.body {
+  padding: 14px;
+}
+
+.blurb {
+  margin: 0 0 14px;
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+
+.optionGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .optionGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  padding: 14px;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.option:hover {
+  border-color: #00aaff;
+  background: rgba(0, 170, 255, 0.08);
+}
+
+.optionTitle {
+  font-weight: bold;
+  font-size: 1.05em;
+}
+
+.optionDesc {
+  font-size: 0.82em;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(128, 128, 128, 0.3);
+}

@@ -1,46 +1,47 @@
-import React, { useState } from 'react';
-import { Badge, Drawer, Tooltip, Button, Popconfirm, Dropdown, Menu } from 'antd';
-import {
-  DownloadOutlined,
-  ExportOutlined,
-  QuestionCircleOutlined,
-  SettingOutlined,
-} from '@ant-design/icons';
+import React, { useRef, useState } from 'react';
+import { Badge, Drawer, Tooltip, Dropdown, Menu } from 'antd';
+import { DownloadOutlined, ExportOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import Downloads from 'components/Downloads';
 import SaveButton from 'components/Toolbar/SaveButton';
 import styles from './styles.module.css';
 import { useProjectContext } from 'context/useProjectContext';
 import { useColorThemeContext } from 'context/ColorThemeContext/useColorThemeContext';
 import { appColors } from 'utils/color';
+import { getSidebarTopOffset } from 'utils/project';
 import Color from 'color';
 
 function Sidebar(props) {
-  const { showSaveButton, showSettingsButton } = props;
+  const { showSaveButton } = props;
 
   const [seenDownloadCount, setSeenDownloadCount] = useState(0);
   const [isDownloadsDrawerVisible, setIsDownloadsDrawerVisible] = useState(
     false
   );
-  const [isSettingsDrawerVisible, setIsSettingsDrawerVisible] = useState(false);
 
   const {
     downloadUrls,
     projectName,
+    importedFileNames,
     imperativeHandlers: {
       exportProjectToMIDI,
       exportLineArt,
       exportToMp3,
       saveProject,
-      deleteProject,
+      openProject,
     },
   } = useProjectContext();
 
   const { isDarkMode } = useColorThemeContext();
 
+  const openFileInputRef = useRef();
+
   const count = downloadUrls.length - seenDownloadCount;
 
   return (
-    <div className={styles.sidebar}>
+    <div
+      className={styles.sidebar}
+      style={{ top: getSidebarTopOffset(importedFileNames.length) }}
+    >
       <div
         className={styles.tabs}
         style={{
@@ -49,14 +50,32 @@ function Sidebar(props) {
         }}
       >
         {showSaveButton && (
-          <Tooltip placement="right" title="Save Project">
-            <div className={styles.tabButton}>
-              <SaveButton
-                onConfirm={name => saveProject(name)}
-                projectName={projectName}
-              />
-            </div>
-          </Tooltip>
+          <>
+            <Tooltip placement="right" title="Save Project (.geob)">
+              <div className={styles.tabButton}>
+                <SaveButton onClick={() => saveProject(projectName)} />
+              </div>
+            </Tooltip>
+            <Tooltip placement="right" title="Open Project (.geob)">
+              <div
+                className={styles.tabButton}
+                onClick={() => openFileInputRef.current.click()}
+              >
+                <FolderOpenOutlined />
+              </div>
+            </Tooltip>
+            <input
+              ref={openFileInputRef}
+              type="file"
+              accept=".geob"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files[0];
+                e.target.value = '';
+                if (file) openProject(file);
+              }}
+            />
+          </>
         )}
         <Badge style={{ fontWeight: 'bold' }} count={count} offset={[-2, 2]}>
           <Tooltip placement="right" title="Downloads">
@@ -101,20 +120,7 @@ function Sidebar(props) {
             </div>
           </Tooltip>
         </Dropdown>
-        {showSettingsButton && (
-          <Tooltip placement="right" title="Settings">
-            <div
-              className={styles.tabButton}
-              onClick={() => {
-                setIsSettingsDrawerVisible(true);
-              }}
-            >
-              <SettingOutlined />
-            </div>
-          </Tooltip>
-        )}
       </div>
-      {/* TODO: combine drawers? */}
       <Drawer
         title="Downloads"
         placement="left"
@@ -133,29 +139,6 @@ function Sidebar(props) {
       >
         <Downloads downloadUrls={downloadUrls} />
       </Drawer>
-      {showSettingsButton && (
-        <Drawer
-          title="Settings"
-          placement="left"
-          width={400}
-          onClose={() => setIsSettingsDrawerVisible(false)}
-          visible={isSettingsDrawerVisible}
-        >
-          <Popconfirm
-            title={`Delete "${projectName}"? This action cannot be undone.`}
-            placement="rightTop"
-            okText="Delete"
-            okType="danger"
-            cancelText="Cancel"
-            onConfirm={deleteProject}
-            icon={<QuestionCircleOutlined />}
-          >
-            <Button style={{ fontWeight: 'bold' }} type="danger">
-              Delete Project
-            </Button>
-          </Popconfirm>
-        </Drawer>
-      )}
     </div>
   );
 }

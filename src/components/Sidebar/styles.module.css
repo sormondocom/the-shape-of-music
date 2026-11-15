@@ -2,9 +2,9 @@
   position: absolute;
   z-index: 200;
   left: 0;
-  /* leaves room for FileNameBadge (toolbar bottom at 80px + its own
-     padded height) directly above - keep in sync if that badge's size
-     changes */
+  /* Base case (no imported files); Sidebar/index.jsx overrides this
+     inline via utils/project.js's getSidebarTopOffset, which grows with
+     FileNameBadge's imported-files list so this never overlaps it. */
   top: 124px;
   display: flex;
   flex-direction: flex-column;

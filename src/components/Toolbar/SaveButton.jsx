@@ -1,48 +1,18 @@
-import React, { useState } from 'react';
-import { Popconfirm, Input } from 'antd';
-import { QuestionCircleOutlined, SaveOutlined } from '@ant-design/icons';
+import React from 'react';
+import { SaveOutlined } from '@ant-design/icons';
 
-const MAX_NAME_LENGTH = 30;
-
+// No in-app name prompt or "overwrite?" confirmation any more - saveProject
+// (Project/index.jsx) always goes through a real save dialog now (utils/
+// file.js's saveFileAs prefers the native Save As picker), which already
+// lets the user name/confirm the file themselves. Asking twice was also
+// how this ever said "Overwrite X?" about a project named after whatever
+// MIDI/shapefile it was imported from - implying saving could overwrite
+// that original file, which it never did or will; a project only ever
+// saves as its own separate .geob file.
 function SaveButton(props) {
-  const { projectName, onConfirm } = props;
-  const [newProjectName, setProjectName] = useState(
-    projectName || 'My Project'
-  );
-
-  const handleSubmit = e => {
-    newProjectName ? onConfirm(newProjectName) : alert('Please enter a name');
-  };
-
+  const { onClick } = props;
   return (
-    <Popconfirm
-      title={
-        <div style={{ maxWidth: 200 }}>
-          <div style={{ marginBottom: 15 }}>
-            {projectName
-              ? `Overwrite "${projectName}"?`
-              : 'What is your project named?'}
-          </div>
-          {!projectName && (
-            <Input
-              autoFocus
-              value={newProjectName}
-              onPressEnter={handleSubmit}
-              onChange={({ target: { value } }) => {
-                if (value.length < MAX_NAME_LENGTH) setProjectName(value);
-              }}
-            />
-          )}
-        </div>
-      }
-      placement="rightTop"
-      okText="Save"
-      cancelText="Cancel"
-      onConfirm={handleSubmit}
-      icon={<QuestionCircleOutlined />}
-    >
-      <SaveOutlined id="SaveButton" />
-    </Popconfirm>
+    <SaveOutlined id="SaveButton" title="Save Project" onClick={onClick} />
   );
 }
 

@@ -1,0 +1,73 @@
+.cluster {
+  position: absolute;
+  z-index: 150;
+  bottom: 20px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.dpad {
+  display: grid;
+  grid-template-columns: 22px 22px 22px;
+  grid-template-rows: 22px 22px 22px;
+  gap: 2px;
+}
+
+.zoomRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.button {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1;
+  /* a real border, not just a tinted background - musical mode's canvas
+     is #eee (src/static/css/main.css), close enough to a faint grey
+     background fill that the buttons barely read as distinct controls
+     against it */
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  color: #555;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+  opacity: 0.9;
+}
+
+.button:hover {
+  opacity: 1;
+  border-color: #00aaff;
+  background: #fff;
+}
+
+.button:active {
+  background: rgba(0, 170, 255, 0.15);
+}
+
+.cluster.dark .button {
+  color: #e8e8e8;
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.cluster.dark .button:hover {
+  border-color: #00aaff;
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.cluster.dark .button:active {
+  background: rgba(0, 170, 255, 0.25);
+}

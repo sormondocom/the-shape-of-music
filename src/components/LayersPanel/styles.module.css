@@ -95,6 +95,7 @@
 }
 
 .rowHidden .swatch,
+.rowHidden .referenceIcon,
 .rowHidden .label {
   opacity: 0.4;
 }

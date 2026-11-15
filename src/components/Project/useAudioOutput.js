@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Tone from 'tone';
 import { SEND_CHANNELS } from 'utils/music';
 import { stopAllNotes } from 'utils/sf2Engine';
+import { silenceAllSynths } from 'components/Shape/Synth';
 
 export const useAudioOutput = () => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -65,13 +66,26 @@ export const useAudioOutput = () => {
   const stop = () => {
     Tone.Transport.stop();
     stopAllNotes();
+    // stopAllNotes() above is the SF2 engine's own panic - it doesn't
+    // touch the OTHER per-shape Tone.js synths (built-in presets), which
+    // schedule their own noteOn/noteOff on real AudioContext time
+    // (Shape/Synth.js's triggerAttackRelease) entirely independent of
+    // Transport state once triggered. A sustained instrument's held note
+    // would otherwise keep ringing until its own originally-scheduled
+    // release, regardless of how many times Stop is pressed. This is the
+    // equivalent hard-cutoff for those.
+    silenceAllSynths();
     setIsPlaying(false);
   };
 
-  // Jumps the playhead back to 0 WITHOUT touching play/pause state -
-  // unlike stop() above, playback keeps running if it was already
-  // running. Clearing the canvas (the explicit Clear button, and MIDI
-  // import's own clear-first behavior) calls this: without it, a new
+  // Jumps the playhead back to 0 - ALSO pauses now (see the bug this
+  // fixed: clearing/importing while playback was running left the
+  // Transport ticking straight through the reset, so the freshly-mounted
+  // new content started sounding immediately with no Play press at all -
+  // the exact "picks up where the old one left off" symptom below, just
+  // for the NEW content instead of a stale old one). Clearing the canvas
+  // (the explicit Clear button, and MIDI import's own clear-first
+  // behavior) calls this: without the position reset specifically, a new
   // import mounts its shapes while Transport.seconds is still wherever it
   // was left (if nothing ever paused/stopped it) - each shape's
   // startOffset is scheduled as an absolute Transport time, which, if
@@ -102,9 +116,21 @@ export const useAudioOutput = () => {
   //   regardless of Transport.cancel() above. This is the "stops
   //   eventually, with some delay" half of the same bug report.
   const resetPosition = () => {
+    // Halt the clock BEFORE touching anything else below, so nothing can
+    // tick forward mid-reset and schedule/trigger against a half-reset
+    // state. pause() (not stop()) because the position is being set
+    // explicitly right after anyway - no need for stop()'s own implicit
+    // rewind too.
+    Tone.Transport.pause();
     Tone.Transport.cancel(0);
     Tone.Transport.seconds = 0;
     stopAllNotes();
+    // Same non-SF2 half of the panic as stop() above - see its own
+    // comment. A new MIDI/geo import landing on top of a still-sustaining
+    // note from the previous one is the same bug, just reached from here
+    // instead of the Stop button.
+    silenceAllSynths();
+    setIsPlaying(false);
   };
 
   return {

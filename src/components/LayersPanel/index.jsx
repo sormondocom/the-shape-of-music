@@ -5,6 +5,8 @@ import cx from 'classnames';
 import { themeColors } from 'utils/color';
 import { useColorThemeContext } from 'context/ColorThemeContext/useColorThemeContext';
 import { useMeasuredHeight } from 'utils/useMeasuredHeight';
+import LayerRow from './LayerRow';
+import RowButton from './RowButton';
 import styles from './styles.module.css';
 
 const propTypes = {
@@ -15,11 +17,14 @@ const propTypes = {
   soloedShapeIndices: PropTypes.instanceOf(Set).isRequired,
   referenceImages: PropTypes.array.isRequired,
   selectedReferenceImageId: PropTypes.string,
+  referenceGeoLayers: PropTypes.array.isRequired,
+  selectedReferenceGeoLayerId: PropTypes.string,
   onShapeClick: PropTypes.func.isRequired,
   onMuteChange: PropTypes.func.isRequired,
   onVisibilityChange: PropTypes.func.isRequired,
   onSoloChange: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
+  onDeleteSelected: PropTypes.func.isRequired,
   onSelectAll: PropTypes.func.isRequired,
   onClearSelection: PropTypes.func.isRequired,
   onPlayAlone: PropTypes.func.isRequired,
@@ -27,6 +32,11 @@ const propTypes = {
   onPlayAll: PropTypes.func.isRequired,
   onSelectReferenceImage: PropTypes.func.isRequired,
   onDeleteReferenceImage: PropTypes.func.isRequired,
+  onSelectReferenceGeoLayer: PropTypes.func.isRequired,
+  onDeleteReferenceGeoLayer: PropTypes.func.isRequired,
+  onRenameReferenceGeoLayer: PropTypes.func.isRequired,
+  onCenterReferenceGeoLayer: PropTypes.func.isRequired,
+  onToggleReferenceGeoLayerVisibility: PropTypes.func.isRequired,
   onOpenSheetPreview: PropTypes.func.isRequired,
   onPreviewShapeSheet: PropTypes.func.isRequired,
   onNameChange: PropTypes.func.isRequired,
@@ -36,8 +46,11 @@ const propTypes = {
   GIMP-style docked layers list - every shape already *is* a "layer"
   (shapesList is the source of truth); this is just a scannable view over it
   with the same select/mute/solo/delete handlers shapes already use on canvas.
-  The reference image (if any) shows as a distinct, non-musical "reference"
-  row at the top - no color/mute/solo, since those are shape-only concepts.
+  Reference images and reference geo layers show as their own distinct,
+  non-musical rows above the shapes - no color/mute/solo, since those are
+  shape-only concepts. All three row types share LayerRow/RowButton (this
+  folder) for the row shell, rename-in-place, and action buttons, rather
+  than three copies of the same markup with slightly different details.
 */
 function LayersPanel(props) {
   const {
@@ -48,11 +61,14 @@ function LayersPanel(props) {
     soloedShapeIndices,
     referenceImages,
     selectedReferenceImageId,
+    referenceGeoLayers,
+    selectedReferenceGeoLayerId,
     onShapeClick,
     onMuteChange,
     onVisibilityChange,
     onSoloChange,
     onDelete,
+    onDeleteSelected,
     onSelectAll,
     onClearSelection,
     onPlayAlone,
@@ -60,31 +76,57 @@ function LayersPanel(props) {
     onPlayAll,
     onSelectReferenceImage,
     onDeleteReferenceImage,
+    onSelectReferenceGeoLayer,
+    onDeleteReferenceGeoLayer,
+    onRenameReferenceGeoLayer,
+    onCenterReferenceGeoLayer,
+    onToggleReferenceGeoLayerVisibility,
     onOpenSheetPreview,
     onPreviewShapeSheet,
     onNameChange,
   } = props;
 
-  // { x, y, target: { type: 'shape', index } | { type: 'reference' } } | null
+  // { x, y, items: [{ label, onClick }] } | null - every row type builds
+  // its own items array (it already has everything in scope to do so),
+  // so this renderer never needs to know what kind of row was
+  // right-clicked.
   const [contextMenu, setContextMenu] = useState(null);
-  // index currently being renamed (double-click, or the context menu's
-  // Rename item) - null means no row is in edit mode. Only one at a time;
-  // renaming a group selection at once wouldn't have an obvious single
-  // name to show, so this always targets exactly one row.
-  const [editingIndex, setEditingIndex] = useState(null);
-  const [draftName, setDraftName] = useState('');
-  const { isDarkMode } = useColorThemeContext();
-  const colorControllerPanelHeight = useMeasuredHeight('colorControllerPanel');
+  const openContextMenu = (e, items) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, items });
+  };
 
-  const startRenaming = (index, currentName) => {
-    setEditingIndex(index);
+  // One rename state for every row type, not one per type - a target is
+  // { kind: 'shape', index } or { kind: 'referenceGeoLayer', id }; only
+  // one row is ever being renamed at a time, so a single slot is enough.
+  // (Reference images have no rename at all right now - LayerRow's
+  // onStartRename is simply omitted for that row.)
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [draftName, setDraftName] = useState('');
+
+  const startRenaming = (target, currentName) => {
+    setRenameTarget(target);
     setDraftName(currentName || '');
   };
-
-  const commitRename = index => {
-    onNameChange(index)(draftName.trim());
-    setEditingIndex(null);
+  const cancelRenaming = () => setRenameTarget(null);
+  const commitRenaming = () => {
+    const target = renameTarget;
+    if (!target) return;
+    const trimmed = draftName.trim();
+    setRenameTarget(null);
+    if (target.kind === 'shape') {
+      onNameChange(target.index)(trimmed);
+    } else if (target.kind === 'referenceGeoLayer') {
+      onRenameReferenceGeoLayer(target.id)(trimmed);
+    }
   };
+  const isRenamingShape = index =>
+    !!renameTarget && renameTarget.kind === 'shape' && renameTarget.index === index;
+  const isRenamingGeoLayer = id =>
+    !!renameTarget && renameTarget.kind === 'referenceGeoLayer' && renameTarget.id === id;
+
+  const { isDarkMode } = useColorThemeContext();
+  const colorControllerPanelHeight = useMeasuredHeight('colorControllerPanel');
 
   const visibleShapes = shapesList
     .map((shape, index) => ({ shape, index }))
@@ -113,43 +155,88 @@ function LayersPanel(props) {
         </div>
       </div>
       <div className={styles.list}>
-        {visibleShapes.length === 0 && referenceImages.length === 0 && (
-          <div className={styles.empty}>
-            Draw, insert, or trace a shape to see it here.
-          </div>
-        )}
+        {visibleShapes.length === 0 &&
+          referenceImages.length === 0 &&
+          referenceGeoLayers.length === 0 && (
+            <div className={styles.empty}>
+              Draw, insert, or trace a shape to see it here.
+            </div>
+          )}
+
+        {referenceGeoLayers.map(layer => {
+          const isSelected = layer.id === selectedReferenceGeoLayerId;
+          const isVisible = layer.isVisible !== false;
+          return (
+            <LayerRow
+              key={layer.id}
+              isSelected={isSelected}
+              isHidden={!isVisible}
+              onClick={() => onSelectReferenceGeoLayer(isSelected ? null : layer.id)}
+              onContextMenu={e =>
+                openContextMenu(e, [
+                  {
+                    label: 'Rename',
+                    onClick: () =>
+                      startRenaming(
+                        { kind: 'referenceGeoLayer', id: layer.id },
+                        layer.sourceLabel
+                      ),
+                  },
+                  { label: 'Center', onClick: () => onCenterReferenceGeoLayer(layer.id) },
+                  {
+                    label: isVisible ? 'Hide' : 'Show',
+                    onClick: () => onToggleReferenceGeoLayerVisibility(layer.id),
+                  },
+                  { label: 'Delete', onClick: () => onDeleteReferenceGeoLayer(layer.id) },
+                ])
+              }
+              icon={<span className={styles.referenceIcon}>🗺</span>}
+              label={`${layer.sourceLabel || 'Reference layer'} (${layer.tracks.length.toLocaleString()} shape${
+                layer.tracks.length === 1 ? '' : 's'
+              })`}
+              isEditing={isRenamingGeoLayer(layer.id)}
+              draftValue={draftName}
+              onDraftChange={setDraftName}
+              onStartRename={() => startRenaming({ kind: 'referenceGeoLayer', id: layer.id }, layer.sourceLabel)}
+              onCommitRename={commitRenaming}
+              onCancelRename={cancelRenaming}
+            >
+              <RowButton
+                title={isVisible ? 'Hide' : 'Show'}
+                isActive={isVisible}
+                onClick={() => onToggleReferenceGeoLayerVisibility(layer.id)}
+              >
+                👁
+              </RowButton>
+              <RowButton title="Delete" onClick={() => onDeleteReferenceGeoLayer(layer.id)}>
+                ✕
+              </RowButton>
+            </LayerRow>
+          );
+        })}
 
         {referenceImages.map((img, i) => {
           const isSelected = img.id === selectedReferenceImageId;
           return (
-            <div
+            <LayerRow
               key={img.id}
-              className={cx(styles.row, { [styles.rowSelected]: isSelected })}
-              onClick={() =>
-                onSelectReferenceImage(isSelected ? null : img.id)
+              isSelected={isSelected}
+              onClick={() => onSelectReferenceImage(isSelected ? null : img.id)}
+              onContextMenu={e =>
+                openContextMenu(e, [
+                  {
+                    label: 'Delete Reference Image',
+                    onClick: () => onDeleteReferenceImage(img.id),
+                  },
+                ])
               }
-              onContextMenu={e => {
-                e.preventDefault();
-                setContextMenu({
-                  x: e.clientX,
-                  y: e.clientY,
-                  target: { type: 'reference', id: img.id },
-                });
-              }}
+              icon={<span className={styles.referenceIcon}>🖼</span>}
+              label={`Reference ${i + 1}`}
             >
-              <span className={styles.referenceIcon}>🖼</span>
-              <span className={styles.label}>Reference {i + 1}</span>
-              <button
-                className={styles.rowButton}
-                title="Delete"
-                onClick={e => {
-                  e.stopPropagation();
-                  onDeleteReferenceImage(img.id);
-                }}
-              >
+              <RowButton title="Delete" onClick={() => onDeleteReferenceImage(img.id)}>
                 ✕
-              </button>
-            </div>
+              </RowButton>
+            </LayerRow>
           );
         })}
 
@@ -159,113 +246,66 @@ function LayersPanel(props) {
           const isSoloed = soloedShapeIndices.has(index);
           const isVisible = shape.isVisible !== false;
           return (
-            <div
+            <LayerRow
               key={index}
-              className={cx(styles.row, {
-                [styles.rowSelected]: isSelected,
-                [styles.rowHidden]: !isVisible,
-              })}
+              isSelected={isSelected}
+              isHidden={!isVisible}
               onClick={e => onShapeClick(index, shape.points, e.shiftKey)}
-              onContextMenu={e => {
-                e.preventDefault();
-                setContextMenu({
-                  x: e.clientX,
-                  y: e.clientY,
-                  target: { type: 'shape', index },
-                });
-              }}
-            >
-              <span
-                className={styles.swatch}
-                style={{ background: themeColors[shape.colorIndex] }}
-              />
-              {editingIndex === index ? (
-                <input
-                  className={styles.labelInput}
-                  value={draftName}
-                  autoFocus
-                  onClick={e => e.stopPropagation()}
-                  onChange={e => setDraftName(e.target.value)}
-                  onBlur={() => commitRename(index)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      commitRename(index);
-                    } else if (e.key === 'Escape') {
-                      e.preventDefault();
-                      setEditingIndex(null);
-                    }
-                  }}
-                />
-              ) : (
+              onContextMenu={e =>
+                openContextMenu(e, [
+                  {
+                    label: 'Rename',
+                    onClick: () => startRenaming({ kind: 'shape', index }, shape.name),
+                  },
+                  {
+                    label: 'Play Alone',
+                    onClick: () => onPlayAlone(getContextMenuTargets(index)),
+                  },
+                  {
+                    label: 'Add to Solo',
+                    onClick: () => onAddToSolo(getContextMenuTargets(index)),
+                  },
+                  { label: 'Play All', onClick: () => onPlayAll() },
+                  {
+                    label: 'Delete',
+                    onClick: () => onDeleteSelected(getContextMenuTargets(index)),
+                  },
+                ])
+              }
+              icon={
                 <span
-                  className={styles.label}
-                  title="Double-click to rename"
-                  onDoubleClick={e => {
-                    e.stopPropagation();
-                    startRenaming(index, shape.name);
-                  }}
-                >
-                  {shape.name || `Layer ${index + 1}`}
-                </span>
-              )}
-              <button
-                className={cx(styles.rowButton, {
-                  [styles.rowButtonActive]: isVisible,
-                })}
+                  className={styles.swatch}
+                  style={{ background: themeColors[shape.colorIndex] }}
+                />
+              }
+              label={shape.name || `Layer ${index + 1}`}
+              isEditing={isRenamingShape(index)}
+              draftValue={draftName}
+              onDraftChange={setDraftName}
+              onStartRename={() => startRenaming({ kind: 'shape', index }, shape.name)}
+              onCommitRename={commitRenaming}
+              onCancelRename={cancelRenaming}
+            >
+              <RowButton
                 title={isVisible ? 'Hide (also silences it)' : 'Show'}
-                onClick={e => {
-                  e.stopPropagation();
-                  onVisibilityChange(index)();
-                }}
+                isActive={isVisible}
+                onClick={onVisibilityChange(index)}
               >
                 👁
-              </button>
-              <button
-                className={styles.rowButton}
-                title="Preview as sheet music"
-                onClick={e => {
-                  e.stopPropagation();
-                  onPreviewShapeSheet(index);
-                }}
-              >
+              </RowButton>
+              <RowButton title="Preview as sheet music" onClick={() => onPreviewShapeSheet(index)}>
                 🎼
-              </button>
-              <button
-                className={cx(styles.rowButton, {
-                  [styles.rowButtonActive]: shape.isMuted,
-                })}
-                title="Mute"
-                onClick={e => {
-                  e.stopPropagation();
-                  onMuteChange(index)();
-                }}
-              >
+              </RowButton>
+              <RowButton title="Mute" isActive={shape.isMuted} onClick={onMuteChange(index)}>
                 M
-              </button>
-              <button
-                className={cx(styles.rowButton, {
-                  [styles.rowButtonActive]: isSoloed,
-                })}
-                title="Solo"
-                onClick={e => {
-                  e.stopPropagation();
-                  onSoloChange(index);
-                }}
-              >
+              </RowButton>
+              <RowButton title="Solo" isActive={isSoloed} onClick={() => onSoloChange(index)}>
                 S
-              </button>
-              <button
-                className={styles.rowButton}
-                title="Delete"
-                onClick={e => {
-                  e.stopPropagation();
-                  onDelete(index);
-                }}
-              >
+              </RowButton>
+              <RowButton title="Delete" onClick={() => onDelete(index)}>
                 ✕
-              </button>
-            </div>
+              </RowButton>
+            </LayerRow>
           );
         })}
       </div>
@@ -286,53 +326,17 @@ function LayersPanel(props) {
             })}
             style={{ top: contextMenu.y, left: contextMenu.x }}
           >
-            {contextMenu.target.type === 'reference' ? (
+            {contextMenu.items.map((item, i) => (
               <button
+                key={i}
                 onClick={() => {
-                  onDeleteReferenceImage(contextMenu.target.id);
+                  item.onClick();
                   setContextMenu(null);
                 }}
               >
-                Delete Reference Image
+                {item.label}
               </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => {
-                    const { index } = contextMenu.target;
-                    const shape = shapesList[index];
-                    setContextMenu(null);
-                    startRenaming(index, shape && shape.name);
-                  }}
-                >
-                  Rename
-                </button>
-                <button
-                  onClick={() => {
-                    onPlayAlone(getContextMenuTargets(contextMenu.target.index));
-                    setContextMenu(null);
-                  }}
-                >
-                  Play Alone
-                </button>
-                <button
-                  onClick={() => {
-                    onAddToSolo(getContextMenuTargets(contextMenu.target.index));
-                    setContextMenu(null);
-                  }}
-                >
-                  Add to Solo
-                </button>
-                <button
-                  onClick={() => {
-                    onPlayAll();
-                    setContextMenu(null);
-                  }}
-                >
-                  Play All
-                </button>
-              </>
-            )}
+            ))}
           </div>
         </>
       )}

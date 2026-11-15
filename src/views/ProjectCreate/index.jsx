@@ -1,55 +1,40 @@
-import React, { useContext } from 'react';
-import { withRouter } from 'react-router';
-// import { useMutation } from '@apollo/react-hooks';
+import React, { useState } from 'react';
 
-import { DEFAULT_PROJECT, getProjectSaveData } from 'utils/project';
-import { CurrentUserContext } from 'context/CurrentUserContext/CurrentUserContextProvider';
-
-import {
-  showLoadingMessage,
-  showErrorMessage,
-  showSuccessMessage,
-} from 'utils/message';
+import { DEFAULT_PROJECT } from 'utils/project';
 import ProjectContainer from 'components/Project';
-import { ROUTES } from 'Routes';
-import { apiPostProject } from 'utils/middleware';
 
-function ProjectCreate(props) {
-  const { user: currentUser, authenticate } = useContext(CurrentUserContext);
-  const { history } = props;
+/*
+  The app's one and only screen - everything is local (Project/index.jsx's
+  saveProject/openProject, a .geob file through a real save dialog, utils/
+  file.js), so there's no account, no project id, no backend of any kind
+  to route between. This view's only real job is owning what gets handed
+  to ProjectContainer as its initState: either a brand new project, or
+  whatever an opened .geob file turned out to contain.
 
-  const saveProject = async project => {
-    /* TODO: Automatically save on user login success */
-    if (!currentUser) {
-      authenticate();
-      return;
-    }
+  remountKey forces a fresh ProjectContainer (and so a fresh ShapeCanvas
+  mount, which is what actually seeds shapesList - Project/index.jsx's
+  initShapesList prop only takes effect on mount) every time a different
+  .geob file gets opened, rather than trying to hot-swap tempo/scale/grid/
+  shapes/etc. into an already-running instance piecemeal.
+*/
+function ProjectCreate() {
+  const [loadedProjectData, setLoadedProjectData] = useState(null);
+  const [remountKey, setRemountKey] = useState(0);
 
-    showLoadingMessage('Saving...');
-    const projectSaveData = getProjectSaveData(project);
-    try {
-      const { data: savedProject } = await apiPostProject(projectSaveData);
-      console.log({ savedProject });
-      showSuccessMessage(`Saved "${savedProject.name}"`);
-      history.push({
-        pathname: `${ROUTES.PROJECT}/${savedProject._id}`,
-        state: { projectData: savedProject },
-      });
-    } catch (error) {
-      showErrorMessage(error);
-      return;
-    }
+  const handleOpenProject = data => {
+    setLoadedProjectData(data);
+    setRemountKey(key => key + 1);
   };
 
   const projectProps = {
-    initState: DEFAULT_PROJECT,
-    saveProject,
+    initState: loadedProjectData
+      ? { ...DEFAULT_PROJECT, ...loadedProjectData, projectName: loadedProjectData.name }
+      : DEFAULT_PROJECT,
+    onOpenProject: handleOpenProject,
     showSaveButton: true,
-    showSettingsButton: false,
-    projectAuthor: '',
   };
 
-  return <ProjectContainer {...projectProps} />;
+  return <ProjectContainer key={remountKey} {...projectProps} />;
 }
 
-export default withRouter(ProjectCreate);
+export default ProjectCreate;

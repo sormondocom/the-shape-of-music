@@ -1,4 +1,5 @@
 import { themeColors } from 'utils/color';
+import { getBoundingBoxDiagonal, simplifyToMaxVertices } from 'utils/simplify';
 
 const TRACE_MAX_DIMENSION = 500;
 const MIN_BLOB_AREA_RATIO = 0.0008;
@@ -388,68 +389,6 @@ function traceBoundary(blobMask, width, height, startX, startY) {
     boundary.push(current);
   }
   return boundary;
-}
-
-function perpendicularDistance(point, lineStart, lineEnd) {
-  const [x, y] = point;
-  const [x1, y1] = lineStart;
-  const [x2, y2] = lineEnd;
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const lengthSq = dx * dx + dy * dy;
-  if (lengthSq === 0) return Math.hypot(x - x1, y - y1);
-  const t = ((x - x1) * dx + (y - y1) * dy) / lengthSq;
-  const projX = x1 + t * dx;
-  const projY = y1 + t * dy;
-  return Math.hypot(x - projX, y - projY);
-}
-
-function douglasPeucker(points, epsilon) {
-  if (points.length < 3) return points;
-
-  let maxDist = 0;
-  let index = 0;
-  const end = points.length - 1;
-  for (let i = 1; i < end; i++) {
-    const dist = perpendicularDistance(points[i], points[0], points[end]);
-    if (dist > maxDist) {
-      maxDist = dist;
-      index = i;
-    }
-  }
-
-  if (maxDist > epsilon) {
-    const left = douglasPeucker(points.slice(0, index + 1), epsilon);
-    const right = douglasPeucker(points.slice(index), epsilon);
-    return left.slice(0, -1).concat(right);
-  }
-  return [points[0], points[end]];
-}
-
-function simplifyToMaxVertices(points, initialEpsilon, maxVertices) {
-  let epsilon = initialEpsilon;
-  let simplified = douglasPeucker(points, epsilon);
-  let iterations = 0;
-  while (simplified.length > maxVertices && iterations < 12) {
-    epsilon *= 1.5;
-    simplified = douglasPeucker(points, epsilon);
-    iterations++;
-  }
-  return simplified;
-}
-
-function getBoundingBoxDiagonal(points) {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const [x, y] of points) {
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  return Math.hypot(maxX - minX, maxY - minY);
 }
 
 /* Maps region-local pixel points back to 0..1 UV space relative to the whole image. */

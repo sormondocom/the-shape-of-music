@@ -12,20 +12,25 @@ import Spectrometer from 'components/Spectrometer';
 import PlayBar from 'components/PlayBar';
 
 import { themeColors } from 'utils/color';
-import { convertAndDownloadTracksAsMIDI, saveFileAs } from 'utils/file';
+import {
+  convertAndDownloadTracksAsMIDI,
+  saveFileAs,
+  saveProjectAsGeob,
+  readGeobFile,
+} from 'utils/file';
 import { buildLineArtSVG } from 'utils/svgExport';
-import { showErrorMessage } from 'utils/message';
+import { showErrorMessage, showSuccessMessage } from 'utils/message';
 
 import { keyMap } from './keyMap';
 import ProjectContextProvider from './ProjectContextProvider';
 import { getDefaultParamValues, DEFAULT_SYNTHS } from 'utils/synths';
-import styles from './styles.module.css';
 import { useRecorder } from './useRecorder';
 import { useAudioOutput } from './useAudioOutput';
 import {
   PROJECT_ACTIONS,
   TOOL_TYPES,
   getInitState,
+  getProjectSaveData,
   MIN_PROXIMITY_RADIUS,
   MAX_PROXIMITY_RADIUS,
 } from 'utils/project';
@@ -35,10 +40,11 @@ export default props => {
   const {
     initState,
     showSaveButton,
-    showSettingsButton,
-    projectAuthor,
-    deleteProject: deleteProjectMutation,
-    saveProject: saveProjectMutation,
+    // Called with the freshly-parsed data from an opened .geob file -
+    // ProjectCreate (the only view left) remounts in place with it as the
+    // new initState; this component only owns reading the file itself,
+    // not what happens after.
+    onOpenProject,
   } = props;
 
   const shapeCanvas = useRef(null);
@@ -119,6 +125,13 @@ export default props => {
       }
       case PROJECT_ACTIONS.SET_PROJECT_NAME:
         return { ...state, projectName: action.payload };
+      case PROJECT_ACTIONS.ADD_IMPORTED_FILE_NAME:
+        return {
+          ...state,
+          importedFileNames: [...state.importedFileNames, action.payload],
+        };
+      case PROJECT_ACTIONS.SET_IMPORTED_FILE_NAMES:
+        return { ...state, importedFileNames: action.payload };
       case PROJECT_ACTIONS.SET_TEMPO: {
         const min = 1;
         const max = 100;
@@ -320,6 +333,46 @@ export default props => {
           ...state,
           selectedReferenceImageId: action.payload,
         };
+      case PROJECT_ACTIONS.ADD_REFERENCE_GEO_LAYER:
+        return {
+          ...state,
+          referenceGeoLayers: [...state.referenceGeoLayers, action.payload],
+          selectedReferenceGeoLayerId: null,
+        };
+      case PROJECT_ACTIONS.REMOVE_REFERENCE_GEO_LAYER:
+        return {
+          ...state,
+          referenceGeoLayers: state.referenceGeoLayers.filter(
+            layer => layer.id !== action.payload
+          ),
+          selectedReferenceGeoLayerId:
+            state.selectedReferenceGeoLayerId === action.payload
+              ? null
+              : state.selectedReferenceGeoLayerId,
+        };
+      case PROJECT_ACTIONS.SET_SELECTED_REFERENCE_GEO_LAYER:
+        return {
+          ...state,
+          selectedReferenceGeoLayerId: action.payload,
+        };
+      case PROJECT_ACTIONS.RENAME_REFERENCE_GEO_LAYER:
+        return {
+          ...state,
+          referenceGeoLayers: state.referenceGeoLayers.map(layer =>
+            layer.id === action.payload.id
+              ? { ...layer, sourceLabel: action.payload.sourceLabel }
+              : layer
+          ),
+        };
+      case PROJECT_ACTIONS.TOGGLE_REFERENCE_GEO_LAYER_VISIBILITY:
+        return {
+          ...state,
+          referenceGeoLayers: state.referenceGeoLayers.map(layer =>
+            layer.id === action.payload
+              ? { ...layer, isVisible: layer.isVisible === false }
+              : layer
+          ),
+        };
       case PROJECT_ACTIONS.SET_KNOB_VALUE_FOR_COLOR: {
         const {
           payload: { colorIndex, effectIndex, value },
@@ -431,19 +484,19 @@ export default props => {
     // content start somewhere mid-loop rather than at its own beginning.
     resetPosition();
     dispatch({ type: PROJECT_ACTIONS.RESET_INSTRUMENTS });
-    // initState.projectName is whatever name was actually persisted when
-    // this project last loaded (blank for a brand new one) - the only way
-    // state.projectName ever diverges from it mid-session today is a MIDI
-    // import setting a working name that's never been saved (saveProject
-    // hands off to an external mutation and doesn't write back into this
-    // reducer at all). So resetting to initState.projectName here either
-    // restores a genuinely saved project's real name, or - when that was
-    // blank to begin with - clears an imported-but-unsaved name back to
-    // "Untitled Project" (FileNameBadge's own fallback) right along with
-    // the canvas it described.
+    // initState.projectName/importedFileNames are whatever was actually
+    // persisted when this project last loaded (blank/empty for a brand new
+    // one) - resetting to them here either restores a genuinely saved
+    // project's real name and import history, or - when there wasn't one -
+    // clears back to "Untitled Project" (FileNameBadge's own fallback)
+    // with no imported files listed, right along with the canvas itself.
     dispatch({
       type: PROJECT_ACTIONS.SET_PROJECT_NAME,
       payload: initState.projectName,
+    });
+    dispatch({
+      type: PROJECT_ACTIONS.SET_IMPORTED_FILE_NAMES,
+      payload: initState.importedFileNames || [],
     });
   };
 
@@ -471,10 +524,11 @@ export default props => {
     }
   };
 
-  const importGeoShapes = (pointsLists, colorIndexForTrack, sourceLabel) => {
+  const importGeoShapes = (pointsLists, colorIndexForTrack) => {
     if (shapeCanvas) {
-      shapeCanvas.current.importGeoShapes(pointsLists, colorIndexForTrack, sourceLabel);
+      return shapeCanvas.current.importGeoShapes(pointsLists, colorIndexForTrack);
     }
+    return { ok: false, reason: 'Canvas not ready yet' };
   };
 
   const reassignInstrumentColor = (oldColorIndex, newColorIndex) => {
@@ -526,18 +580,35 @@ export default props => {
     beginRecording();
   };
 
+  // Always a local .geob file (utils/file.js), always through a real save
+  // dialog (saveFileAs prefers the native Save As picker, so the user
+  // actually chooses where - never a silent write) - there's no backend
+  // call here at all any more, and so nothing to be logged in for, no
+  // "author" to be, no ambiguity about overwriting whatever this project
+  // was originally imported from. getProjectSaveData is the exact same
+  // serialization a cloud save used to send - a .geob file is just that,
+  // written to disk instead of POSTed.
   const saveProject = projectName => {
-    if (!projectName) return;
-    console.log('Saving project with name', projectName);
-
-    const projectData = state;
     const shapesList = shapeCanvas.current.getShapesList();
-
-    saveProjectMutation({
-      ...projectData,
-      name: projectName,
+    const projectSaveData = getProjectSaveData({
+      ...state,
+      name: projectName || state.projectName || 'Untitled Project',
       shapesList,
     });
+    saveProjectAsGeob(projectSaveData);
+  };
+
+  // Sidebar's Open action - reads a previously-saved .geob file back in.
+  // Parsing only happens here; onOpenProject (ProjectCreate, the app's
+  // one screen) remounts in place with the result as the new initState.
+  const openProject = async file => {
+    try {
+      const projectData = await readGeobFile(file);
+      onOpenProject(projectData);
+      showSuccessMessage(`Opened "${projectData.name || 'Untitled Project'}"`);
+    } catch (err) {
+      showErrorMessage(err.message);
+    }
   };
 
   const projectContext = {
@@ -562,7 +633,7 @@ export default props => {
       exportLineArt,
       exportToMp3,
       saveProject,
-      deleteProject: deleteProjectMutation,
+      openProject,
     },
   };
 
@@ -578,15 +649,34 @@ export default props => {
 
   const startPanLoop = () => {
     if (panAnimationFrameRef.current !== null) return; // already running
-    let lastTime = performance.now();
+    // null, not performance.now() at call time - that's a DIFFERENT clock
+    // read than the rAF timestamp the first real dt gets computed against
+    // below (performance.now() reflects the instant the keydown handler
+    // ran; requestAnimationFrame's own timestamp reflects when the frame
+    // it's called for began, which isn't guaranteed to be later - it can
+    // land essentially simultaneously, or even slightly earlier, than a
+    // performance.now() read taken moments before during event handling
+    // in the same frame). That gap, whichever sign it happens to land on,
+    // produced a tiny wrongly-signed or oversized delta on the very first
+    // frame of a fresh key press - visible as a brief opposite-direction
+    // flash that then corrected itself once frame 2's clean rAF-to-rAF
+    // delta took over. Seeding from null makes the first callback instead
+    // just establish the clock baseline with zero movement, so every
+    // frame that actually moves anything is a same-clock-source delta.
+    let lastTime = null;
     const loop = now => {
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
       const keys = panKeysRef.current;
       if (!keys.up && !keys.down && !keys.left && !keys.right) {
         panAnimationFrameRef.current = null;
         return;
       }
+      if (lastTime === null) {
+        lastTime = now;
+        panAnimationFrameRef.current = requestAnimationFrame(loop);
+        return;
+      }
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
       const dxDir = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
       const dyDir = (keys.up ? 1 : 0) - (keys.down ? 1 : 0);
       if ((dxDir || dyDir) && shapeCanvas.current) {
@@ -604,15 +694,22 @@ export default props => {
 
   const startZoomLoop = () => {
     if (zoomAnimationFrameRef.current !== null) return;
-    let lastTime = performance.now();
+    // Same cross-clock first-frame fix as startPanLoop above - see its
+    // own comment.
+    let lastTime = null;
     const loop = now => {
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
       const keys = zoomKeysRef.current;
       if (!keys.in && !keys.out) {
         zoomAnimationFrameRef.current = null;
         return;
       }
+      if (lastTime === null) {
+        lastTime = now;
+        zoomAnimationFrameRef.current = requestAnimationFrame(loop);
+        return;
+      }
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
       if (shapeCanvas.current) {
         if (keys.in) shapeCanvas.current.zoomByStep(1, dt);
         if (keys.out) shapeCanvas.current.zoomByStep(-1, dt);
@@ -719,19 +816,11 @@ export default props => {
   return (
     <HotKeys allowChanges keyMap={keyMap} handlers={keyHandlers}>
       <ProjectContextProvider value={projectContext}>
-        {projectAuthor && projectName && (
-          <div className={styles.ProjectTitle}>
-            <strong>{projectName}</strong> by <em>{projectAuthor.name}</em>
-          </div>
-        )}
-
         {/* The Controls */}
         <Toolbar />
 
         {/* What's currently open - imported file's name, saved project
-            name, or an "Untitled" fallback; always visible, unlike
-            ProjectTitle above which only shows for a saved+attributed
-            project */}
+            name, or an "Untitled" fallback; always visible */}
         <FileNameBadge />
 
         {/* The Canvas */}
@@ -753,10 +842,7 @@ export default props => {
         <PlayBar />
 
         {/* Sidebar */}
-        <Sidebar
-          showSaveButton={showSaveButton}
-          showSettingsButton={showSettingsButton}
-        />
+        <Sidebar showSaveButton={showSaveButton} />
 
         {/* Musical canvas / geographic mode switch */}
         <CanvasModeToggle />

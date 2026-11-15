@@ -47,6 +47,60 @@ export const readFileAsDataURL = file =>
     reader.readAsDataURL(file);
   });
 
+const readFileAsText = file =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+
+// The app's own project format - "GeoBoard" (this project's earlier name
+// for what later became the geographic-canvas feature; "a musical
+// geoboard" per the README's own opening line). Just JSON under a
+// distinct extension, same idea as a lot of app-specific formats (.ipynb,
+// for instance) - deliberately NOT .json, so saving/opening a project
+// never looks like (or risks literally becoming) saving over whatever
+// file you originally imported from (a .mid, a .shp) - this is always
+// its own separate file, in this app's own format, regardless of what
+// the project started from.
+export const GEOB_EXTENSION = '.geob';
+const GEOB_MIME_TYPE = 'application/geob+json';
+// Bumped only if a future change to what getProjectSaveData (utils/
+// project.js) produces would break reading an OLDER .geob file as-is -
+// readGeobFile can use this to decide whether/how to migrate, rather than
+// guessing from field presence alone.
+const GEOB_FORMAT_VERSION = 1;
+
+export const saveProjectAsGeob = async projectSaveData => {
+  const payload = { geobFormatVersion: GEOB_FORMAT_VERSION, ...projectSaveData };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: GEOB_MIME_TYPE,
+  });
+  const suggestedName = `${projectSaveData.name || 'Untitled Project'}${GEOB_EXTENSION}`;
+  await saveFileAs(blob, suggestedName, GEOB_MIME_TYPE);
+};
+
+// The Open counterpart - deliberately light validation (just "is this
+// even a plausible project save, not literal garbage"), not a full schema
+// check: utils/project.js's getInitState already tolerates a project
+// missing most individual fields (same code path a cloud-loaded project
+// without every field goes through), so there's nothing extra to enforce
+// here beyond "this parses as JSON and has a shapesList array".
+export const readGeobFile = async file => {
+  const text = await readFileAsText(file);
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (err) {
+    throw new Error('Not a valid .geob file (not JSON)');
+  }
+  if (!data || !Array.isArray(data.shapesList)) {
+    throw new Error('Not a valid .geob file (missing shapesList)');
+  }
+  return data;
+};
+
 export const ZipFile = name => {
   const zip = new JSZip();
   const folder = zip.folder(name);

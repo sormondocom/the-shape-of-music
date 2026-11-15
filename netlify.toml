@@ -1,11 +1,9 @@
 [dev]
   command = "craco start"
   publish = "dist"
-  functions = "netlify/functions"
-  
+
 [build]
   command = "CI=false craco build && yarn append-sw"
-  functions = "netlify/functions"
   publish = "build/"
 
 [[headers]]
